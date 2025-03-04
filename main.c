@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <pthread.h>
+#include <sched.h>
 
 void* inBetweenChars(void* arg)
 { // Thread 1 start
@@ -57,6 +58,10 @@ void* functionPrint(void* arg){
 
 int main()
 {
+    //force the threads to run on one core
+    cpu_set_t cpuset; 
+    CPU_ZERO(&cpuset);
+    CPU_SET(0, &cpuset);
     // declare the 3 required threads
     pthread_t thread1;
     pthread_t thread2;
