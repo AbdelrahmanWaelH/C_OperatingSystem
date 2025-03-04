@@ -15,6 +15,4 @@ typedef struct
     size_t memoryUsage;
 } ThreadMetric;
 
-void initializeThreadMetric(ThreadMetric *metric, pthread_t threadId);
-
 double timespecToMillis(struct timespec ts);

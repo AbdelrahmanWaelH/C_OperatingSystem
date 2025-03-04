@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "ThreadMetric.h"
+#include "TimeUtils.h"
 #include <stdio.h>
 #include <pthread.h>
 #include <sched.h>
@@ -18,6 +19,12 @@ ThreadMetric threadMetric3;
 void *inBetweenChars(void *arg)
 { // Thread 1 start
 
+    struct timespec inputWaitStart = {0};
+    struct timespec inputWaitEnd = {0};
+    struct timespec timeDifference = {0};
+    struct timespec totalWaitTime = {0};
+    struct timespec temp = {0};
+
     // Record thread start time.
     clock_gettime(CLOCK_MONOTONIC, &threadMetric1.startTime);
 
@@ -25,13 +32,23 @@ void *inBetweenChars(void *arg)
 
     pthread_mutex_lock(&stdoutMutex);
     printf("Enter the start character: \n");
+    clock_gettime(CLOCK_MONOTONIC, &inputWaitStart);
     scanf(" %c", &start);
+    clock_gettime(CLOCK_MONOTONIC, &inputWaitEnd);
     pthread_mutex_unlock(&stdoutMutex);
+
+    subtractTimespec(&timeDifference, &inputWaitEnd, &inputWaitStart);
+    addTimespec(&totalWaitTime, &totalWaitTime, &timeDifference);
 
     pthread_mutex_lock(&stdoutMutex);
     printf("Enter the end character: \n");
+    clock_gettime(CLOCK_MONOTONIC, &inputWaitStart);
     scanf(" %c", &end);
+    clock_gettime(CLOCK_MONOTONIC, &inputWaitEnd);
     pthread_mutex_unlock(&stdoutMutex);
+
+    subtractTimespec(&timeDifference, &inputWaitEnd, &inputWaitStart);
+    addTimespec(&totalWaitTime, &totalWaitTime, &timeDifference);
 
     /*if(start > end) swap(start, end)*/
 
@@ -44,6 +61,10 @@ void *inBetweenChars(void *arg)
     }
 
     clock_gettime(CLOCK_MONOTONIC, &threadMetric1.finishTime);
+    threadMetric1.waitTime = timespecToMillis(totalWaitTime);
+    subtractTimespec(&temp, &threadMetric1.finishTime, &threadMetric1.releaseTime);
+    threadMetric1.turnaroundTime = timespecToMillis(temp);
+    threadMetric1.executionTime = threadMetric1.turnaroundTime - threadMetric1.waitTime;
 
 } // Thread 1 end
 
@@ -96,7 +117,7 @@ void *functionPrint(void *arg)
     pthread_t threadId = pthread_self();
 
     pthread_mutex_lock(&stdoutMutex);
-    printf("Welcome to the printing park!\n");
+    printf("##############\nWelcome to the printing park!\n");
     pthread_mutex_unlock(&stdoutMutex);
 
     pthread_mutex_lock(&stdoutMutex);
@@ -104,7 +125,7 @@ void *functionPrint(void *arg)
     pthread_mutex_unlock(&stdoutMutex);
 
     pthread_mutex_lock(&stdoutMutex);
-    printf("Enjoy your stay!\n");
+    printf("Enjoy your stay!\n#################\n");
     pthread_mutex_unlock(&stdoutMutex);
 }
 
@@ -126,26 +147,32 @@ int main()
     pthread_t thread3;
 
     // Create the first thread and make it run inBetweenChars
-    initializeThreadMetric(&threadMetric1, thread1);
     clock_gettime(CLOCK_MONOTONIC, &threadMetric1.releaseTime);
     pthread_create(&thread1, NULL, inBetweenChars, NULL);
+    pthread_setaffinity_np(thread1, sizeof(cpuset), &cpuset);
 
     // Create the second thread and make it run functionPrint
     pthread_create(&thread2, NULL, functionPrint, NULL);
+    pthread_setaffinity_np(thread2, sizeof(cpuset), &cpuset);
 
     // Create the second thread and make it run sumAvgProduct
     pthread_create(&thread3, NULL, sumAvgProduct, NULL);
+    pthread_setaffinity_np(thread3, sizeof(cpuset), &cpuset);
 
     // Wait for each of the threads to finish
     pthread_join(thread1, NULL);
     pthread_join(thread2, NULL);
     pthread_join(thread3, NULL);
 
-    printf("Thread 1 start: %lfms\n", timespecToMillis(threadMetric1.startTime) - timespecToMillis(processStartTime));
+    printf("Thread 1 start timestamp: %lfms\n", timespecToMillis(threadMetric1.startTime) - timespecToMillis(processStartTime));
 
-    printf("Thread 1 finish: %lfms\n", timespecToMillis(threadMetric1.finishTime) - timespecToMillis(processStartTime));
+    printf("Thread 1 finish timestamp: %lfms\n", timespecToMillis(threadMetric1.finishTime) - timespecToMillis(processStartTime));
 
-    printf("Thread 1 Total Execution Time: %lfms\n", timespecToMillis(threadMetric1.finishTime) - timespecToMillis(threadMetric1.startTime));
+    printf("Thread 1 wait time: %lfms\n", threadMetric1.waitTime);
+
+    printf("Thread 1 execution time: %lfms\n", threadMetric1.executionTime);
+
+    printf("Thread 1 Turnaround Time: %lfms\n", threadMetric1.turnaroundTime);
 
     return 0;
 }
