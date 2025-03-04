@@ -1,15 +1,19 @@
 cmake_minimum_required(VERSION 3.10)
-project(OperatingSystems C)  # Specify C language
 
-set(CMAKE_C_STANDARD 11)  # Use C11 standard
+# Project name
+project(OperatingSystems C)
+
+# Set the C standard
+set(CMAKE_C_STANDARD 99)
 
 # Set the source directory
-set(SRC_DIR ${CMAKE_SOURCE_DIR}/src)
+set(SRC_DIR src)
 
-# Find all source files in src/
-file(GLOB SRC_FILES "${SRC_DIR}/*.c")
+# Add executable with the source files
+add_executable(OperatingSystems
+    ${SRC_DIR}/main.c
+    ${SRC_DIR}/ThreadMetric.c
+)
 
-add_executable(OperatingSystems ${SRC_FILES})
-
-# Include the src folder for headers
-include_directories(${SRC_DIR})
+# Include directories for header files
+target_include_directories(OperatingSystems PRIVATE ${SRC_DIR})
