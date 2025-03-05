@@ -65,6 +65,7 @@ void *inBetweenChars(void *arg)
     subtractTimespec(&temp, &threadMetric1.finishTime, &threadMetric1.releaseTime);
     threadMetric1.turnaroundTime = timespecToMillis(temp);
     threadMetric1.executionTime = threadMetric1.turnaroundTime - threadMetric1.waitTime;
+    threadMetric1.responseTime = timespecToMillis(threadMetric1.startTime) - timespecToMillis(threadMetric1.releaseTime);
 
 } // Thread 1 end
 
