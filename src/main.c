@@ -30,7 +30,7 @@ void *inBetweenChars(void *arg)
 
     char start, end;
 
-    pthread_mutex_lock(&stdoutMutex);
+    safeMutexLock(&stdoutMutex, &totalWaitTime);
     printf("Enter the start character: \n");
     clock_gettime(CLOCK_MONOTONIC, &inputWaitStart);
     scanf(" %c", &start);
@@ -40,7 +40,7 @@ void *inBetweenChars(void *arg)
     subtractTimespec(&timeDifference, &inputWaitEnd, &inputWaitStart);
     addTimespec(&totalWaitTime, &totalWaitTime, &timeDifference);
 
-    pthread_mutex_lock(&stdoutMutex);
+    safeMutexLock(&stdoutMutex, &totalWaitTime);
     printf("Enter the end character: \n");
     clock_gettime(CLOCK_MONOTONIC, &inputWaitStart);
     scanf(" %c", &end);
@@ -54,7 +54,7 @@ void *inBetweenChars(void *arg)
 
     while (start <= end)
     {
-        pthread_mutex_lock(&stdoutMutex);
+        safeMutexLock(&stdoutMutex, &totalWaitTime);
         printf("%c\n", start);
         pthread_mutex_unlock(&stdoutMutex);
         start++;
@@ -147,18 +147,19 @@ int main()
     pthread_t thread2;
     pthread_t thread3;
 
+    pthread_attr_t threadAttr;
+    pthread_attr_init(&threadAttr);
+    pthread_attr_setaffinity_np(&threadAttr, sizeof(cpu_set_t), &cpuset);
+
     // Create the first thread and make it run inBetweenChars
     clock_gettime(CLOCK_MONOTONIC, &threadMetric1.releaseTime);
-    pthread_create(&thread1, NULL, inBetweenChars, NULL);
-    pthread_setaffinity_np(thread1, sizeof(cpuset), &cpuset);
+    pthread_create(&thread1, &threadAttr, inBetweenChars, NULL);
 
     // Create the second thread and make it run functionPrint
-    pthread_create(&thread2, NULL, functionPrint, NULL);
-    pthread_setaffinity_np(thread2, sizeof(cpuset), &cpuset);
+    pthread_create(&thread2, &threadAttr, functionPrint, NULL);
 
     // Create the second thread and make it run sumAvgProduct
-    pthread_create(&thread3, NULL, sumAvgProduct, NULL);
-    pthread_setaffinity_np(thread3, sizeof(cpuset), &cpuset);
+    pthread_create(&thread3, &threadAttr, sumAvgProduct, NULL);
 
     // Wait for each of the threads to finish
     pthread_join(thread1, NULL);

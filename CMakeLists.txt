@@ -14,6 +14,7 @@ add_executable(OperatingSystems
     ${SRC_DIR}/main.c
     ${SRC_DIR}/ThreadMetric.c
     ${SRC_DIR}/TimeUtils.c
+    ${SRC_DIR}/ThreadUtils.c
 )
 
 # Include directories for header files
