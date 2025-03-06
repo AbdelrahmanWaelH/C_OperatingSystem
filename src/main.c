@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "ThreadMetric.h"
+#include "ThreadUtils.h"
 #include "TimeUtils.h"
 #include <stdio.h>
 #include <pthread.h>
@@ -143,10 +144,6 @@ void testMethod()
     for (long i = 0; i < 10e9; i++)
     {
         x++;
-        if (i % (long)(1e9) == 0)
-        {
-            printf("%ld\n", i);
-        }
     }
     clock_gettime(CLOCK_MONOTONIC, &executionEnd);
 
@@ -169,7 +166,7 @@ int main()
 {
 
     testMethod();
-    return;
+    return 0;
     // Get the arbitrary start time of the program to measure difference of time.
     struct timespec processStartTime;
     clock_gettime(CLOCK_MONOTONIC, &processStartTime);

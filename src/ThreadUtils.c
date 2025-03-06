@@ -1,7 +1,7 @@
 #define _GNU_SOURCE
 #include "ThreadUtils.h"
 #include <time.h>
-#include <TimeUtils.h>
+#include "TimeUtils.h"
 
 void safeMutexLock(pthread_mutex_t *mutex, struct timespec *waitAccumulator)
 {
