@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <sched.h>
+#include <unistd.h>
 #include <malloc.h>
 
 // Create a mutex that handles the sharing of the stdout/stdin resource
@@ -66,6 +67,7 @@ void *inBetweenChars(void *arg)
     threadMetric1.turnaroundTime = timespecToMillis(temp);
     threadMetric1.executionTime = threadMetric1.turnaroundTime - threadMetric1.waitTime;
     threadMetric1.responseTime = timespecToMillis(threadMetric1.startTime) - timespecToMillis(threadMetric1.releaseTime);
+    threadMetric1.cpuUsage = threadMetric1.executionTime / (threadMetric1.executionTime + threadMetric1.waitTime);
 
 } // Thread 1 end
 
@@ -130,9 +132,44 @@ void *functionPrint(void *arg)
     pthread_mutex_unlock(&stdoutMutex);
 }
 
+void testMethod()
+{
+
+    struct timespec startTime, finishTime, executionStart, executionEnd;
+    clock_gettime(CLOCK_MONOTONIC, &startTime);
+
+    clock_gettime(CLOCK_MONOTONIC, &executionStart);
+    int x = 0;
+    for (long i = 0; i < 10e9; i++)
+    {
+        x++;
+        if (i % (long)(1e9) == 0)
+        {
+            printf("%ld\n", i);
+        }
+    }
+    clock_gettime(CLOCK_MONOTONIC, &executionEnd);
+
+    sleep(2);
+    clock_gettime(CLOCK_MONOTONIC, &finishTime);
+
+    double startMS, finishMS, execStartMS, execEndMS, executionMS;
+    startMS = timespecToMillis(startTime);
+    finishMS = timespecToMillis(finishTime);
+    execStartMS = timespecToMillis(executionStart);
+    execEndMS = timespecToMillis(executionEnd);
+
+    executionMS = execEndMS - execStartMS;
+
+    printf("CPU Utilization = %lf%%\n", 100 * (executionMS) / (finishMS - startMS));
+    fflush(stdout);
+}
+
 int main()
 {
 
+    testMethod();
+    return;
     // Get the arbitrary start time of the program to measure difference of time.
     struct timespec processStartTime;
     clock_gettime(CLOCK_MONOTONIC, &processStartTime);
@@ -147,6 +184,7 @@ int main()
     pthread_t thread2;
     pthread_t thread3;
 
+    // Create a thread attribute to give to all threads making them run on a single CPU
     pthread_attr_t threadAttr;
     pthread_attr_init(&threadAttr);
     pthread_attr_setaffinity_np(&threadAttr, sizeof(cpu_set_t), &cpuset);
@@ -160,6 +198,12 @@ int main()
 
     // Create the second thread and make it run sumAvgProduct
     pthread_create(&thread3, &threadAttr, sumAvgProduct, NULL);
+
+    struct sched_param param;
+    param.sched_priority = 50;
+    pthread_setschedparam(thread1, SCHED_FIFO, &param);
+    pthread_setschedparam(thread2, SCHED_FIFO, &param);
+    pthread_setschedparam(thread3, SCHED_FIFO, &param);
 
     // Wait for each of the threads to finish
     pthread_join(thread1, NULL);
@@ -175,6 +219,8 @@ int main()
     printf("Thread 1 execution time: %lfms\n", threadMetric1.executionTime);
 
     printf("Thread 1 Turnaround Time: %lfms\n", threadMetric1.turnaroundTime);
+
+    printf("Thread 1 CPU Usage: %lf \% \n", threadMetric1.cpuUsage);
 
     return 0;
 }

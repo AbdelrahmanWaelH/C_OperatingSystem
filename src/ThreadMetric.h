@@ -12,7 +12,9 @@ typedef struct
     double waitTime;
     double responseTime;
     double turnaroundTime;
+    double cpuUsage;
     size_t memoryUsage;
+
 } ThreadMetric;
 
 double timespecToMillis(struct timespec ts);
