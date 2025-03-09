@@ -1,6 +1,5 @@
 #define _GNU_SOURCE
 #include "ThreadMetric.h"
-#include "ThreadUtils.h"
 #include "TimeUtils.h"
 #include <stdio.h>
 #include <pthread.h>
@@ -8,9 +7,6 @@
 #include <unistd.h>
 #include <malloc.h>
 
-// Create a mutex that handles the sharing of the stdout/stdin resource
-// All uses of stdout/stdin (printf and scanf) will be wrapped in locking/unlocking of mutex to handle sharing resources correctly
-pthread_mutex_t stdoutMutex = PTHREAD_MUTEX_INITIALIZER;
 
 // Structs to store details about each thread's performance metrics
 // These are global so that they can be accessed from any method
@@ -32,22 +28,18 @@ void *inBetweenChars(void *arg)
 
     char start, end;
 
-    safeMutexLock(&stdoutMutex, &totalWaitTime);
     printf("Enter the start character: \n");
     clock_gettime(CLOCK_MONOTONIC, &inputWaitStart);
     scanf(" %c", &start);
     clock_gettime(CLOCK_MONOTONIC, &inputWaitEnd);
-    pthread_mutex_unlock(&stdoutMutex);
 
     subtractTimespec(&timeDifference, &inputWaitEnd, &inputWaitStart);
     addTimespec(&totalWaitTime, &totalWaitTime, &timeDifference);
 
-    safeMutexLock(&stdoutMutex, &totalWaitTime);
     printf("Enter the end character: \n");
     clock_gettime(CLOCK_MONOTONIC, &inputWaitStart);
     scanf(" %c", &end);
     clock_gettime(CLOCK_MONOTONIC, &inputWaitEnd);
-    pthread_mutex_unlock(&stdoutMutex);
 
     subtractTimespec(&timeDifference, &inputWaitEnd, &inputWaitStart);
     addTimespec(&totalWaitTime, &totalWaitTime, &timeDifference);
@@ -56,9 +48,7 @@ void *inBetweenChars(void *arg)
 
     while (start <= end)
     {
-        safeMutexLock(&stdoutMutex, &totalWaitTime);
         printf("%c\n", start);
-        pthread_mutex_unlock(&stdoutMutex);
         start++;
     }
 
@@ -74,123 +64,122 @@ void *inBetweenChars(void *arg)
 
 void *sumAvgProduct(void *arg)
 { // Thread 3 start
+
+    struct timespec inputWaitStart = {0};
+    struct timespec inputWaitEnd = {0};
+    struct timespec timeDifference = {0};
+    struct timespec totalWaitTime = {0};
+    struct timespec temp = {0};
+
+    clock_gettime(CLOCK_MONOTONIC, &threadMetric3.startTime);
+
     int start, end;
     int sum = 0;
     int product = 1;
     float average = 0;
 
-    pthread_mutex_lock(&stdoutMutex);
     printf("Enter the start integer: \n");
+    clock_gettime(CLOCK_MONOTONIC, &inputWaitStart);
     scanf(" %d", &start);
-    pthread_mutex_unlock(&stdoutMutex);
+    clock_gettime(CLOCK_MONOTONIC, &inputWaitEnd);
 
-    pthread_mutex_lock(&stdoutMutex);
+    subtractTimespec(&timeDifference, &inputWaitEnd, &inputWaitStart);
+    addTimespec(&totalWaitTime, &totalWaitTime, &timeDifference);
+
     printf("Enter the end integer: \n");
+    clock_gettime(CLOCK_MONOTONIC, &inputWaitStart);
     scanf(" %d", &end);
-    pthread_mutex_unlock(&stdoutMutex);
+    clock_gettime(CLOCK_MONOTONIC, &inputWaitEnd);
+
+    subtractTimespec(&timeDifference, &inputWaitEnd, &inputWaitStart);
+    addTimespec(&totalWaitTime, &totalWaitTime, &timeDifference);
 
     /*if(start > end) swap(start, end)*/
 
     int delta = end - start + 1;
-
     while (start <= end)
     {
         sum += start;
         product *= start;
         start++;
     }
-
     average = (float)sum / delta;
 
-    pthread_mutex_lock(&stdoutMutex);
     printf("\nThe sum is : %d", sum);
-    pthread_mutex_unlock(&stdoutMutex);
-
-    pthread_mutex_lock(&stdoutMutex);
     printf("\nThe product is : %d", product);
-    pthread_mutex_unlock(&stdoutMutex);
-
-    pthread_mutex_lock(&stdoutMutex);
     printf("\nThe average is : %.2f\n", average);
-    pthread_mutex_unlock(&stdoutMutex);
+
+    clock_gettime(CLOCK_MONOTONIC, &threadMetric3.finishTime);
+    threadMetric3.waitTime = timespecToMillis(totalWaitTime);
+    subtractTimespec(&temp, &threadMetric3.finishTime, &threadMetric3.releaseTime);
+    threadMetric3.turnaroundTime = timespecToMillis(temp);
+    threadMetric3.executionTime = threadMetric3.turnaroundTime - threadMetric3.waitTime;
+    threadMetric3.responseTime = timespecToMillis(threadMetric3.startTime) - timespecToMillis(threadMetric3.releaseTime);
+    threadMetric3.cpuUsage = threadMetric3.executionTime / (threadMetric3.executionTime + threadMetric3.waitTime);
+
 
 } // Thread 3 end
 
 void *functionPrint(void *arg)
-{
-    struct timespec printWaitStart = {0};
-    struct timespec printWaitEnd = {0};
+{ // Thread 2 starts
+    struct timespec inputWaitStart = {0};
+    struct timespec inputWaitEnd = {0};
     struct timespec timeDifference = {0};
     struct timespec totalWaitTime = {0};
     struct timespec temp = {0};
 
     clock_gettime(CLOCK_MONOTONIC, &threadMetric2.startTime);
 
-
-
     pthread_t threadId = pthread_self();
 
-    clock_gettime(CLOCK_MONOTONIC, &printWaitStart);
-    
-    pthread_mutex_lock(&stdoutMutex);
     printf("##############\nWelcome to the printing park!\n");
-    pthread_mutex_unlock(&stdoutMutex);
 
-    pthread_mutex_lock(&stdoutMutex);
     printf("Brought to you by thread with id : %lu \n", threadId);
-    pthread_mutex_unlock(&stdoutMutex);
 
-    pthread_mutex_lock(&stdoutMutex);
     printf("Enjoy your stay!\n#################\n");
-    pthread_mutex_unlock(&stdoutMutex);
 
     clock_gettime(CLOCK_MONOTONIC, &threadMetric2.finishTime);
-
-    clock_gettime(CLOCK_MONOTONIC, &printWaitEnd);
-    subtractTimespec(&timeDifference, &printWaitEnd, &printWaitStart);
-    addTimespec(&totalWaitTime, &totalWaitTime, &timeDifference);
-    threadMetric2.waitTime=timespecToMillis(totalWaitTime);
-    subtractTimespec(&temp, &threadMetric2.finishTime, &threadMetric1.releaseTime);
+    threadMetric2.waitTime = timespecToMillis(totalWaitTime);
+    subtractTimespec(&temp, &threadMetric2.finishTime, &threadMetric2.releaseTime);
     threadMetric2.turnaroundTime = timespecToMillis(temp);
     threadMetric2.executionTime = threadMetric2.turnaroundTime - threadMetric2.waitTime;
     threadMetric2.responseTime = timespecToMillis(threadMetric2.startTime) - timespecToMillis(threadMetric2.releaseTime);
     threadMetric2.cpuUsage = threadMetric2.executionTime / (threadMetric2.executionTime + threadMetric2.waitTime);
-}
 
-void testMethod()
-{
+}// Thread 2 ends
 
-    struct timespec startTime, finishTime, executionStart, executionEnd;
-    clock_gettime(CLOCK_MONOTONIC, &startTime);
-
-    clock_gettime(CLOCK_MONOTONIC, &executionStart);
-    int x = 0;
-    for (long i = 0; i < 10e9; i++)
-    {
-        x++;
-    }
-    clock_gettime(CLOCK_MONOTONIC, &executionEnd);
-
-    sleep(2);
-    clock_gettime(CLOCK_MONOTONIC, &finishTime);
-
-    double startMS, finishMS, execStartMS, execEndMS, executionMS;
-    startMS = timespecToMillis(startTime);
-    finishMS = timespecToMillis(finishTime);
-    execStartMS = timespecToMillis(executionStart);
-    execEndMS = timespecToMillis(executionEnd);
-
-    executionMS = execEndMS - execStartMS;
-
-    printf("CPU Utilization = %lf%%\n", 100 * (executionMS) / (finishMS - startMS));
-    fflush(stdout);
-}
+/*void testMethod()*/
+/*{*/
+/**/
+/*    struct timespec startTime, finishTime, executionStart, executionEnd;*/
+/*    clock_gettime(CLOCK_MONOTONIC, &startTime);*/
+/**/
+/*    clock_gettime(CLOCK_MONOTONIC, &executionStart);*/
+/*    int x = 0;*/
+/*    for (long i = 0; i < 10e9; i++)*/
+/*    {*/
+/*        x++;*/
+/*    }*/
+/*    clock_gettime(CLOCK_MONOTONIC, &executionEnd);*/
+/**/
+/*    sleep(2);*/
+/*    clock_gettime(CLOCK_MONOTONIC, &finishTime);*/
+/**/
+/*    double startMS, finishMS, execStartMS, execEndMS, executionMS;*/
+/*    startMS = timespecToMillis(startTime);*/
+/*    finishMS = timespecToMillis(finishTime);*/
+/*    execStartMS = timespecToMillis(executionStart);*/
+/*    execEndMS = timespecToMillis(executionEnd);*/
+/**/
+/*    executionMS = execEndMS - execStartMS;*/
+/**/
+/*    printf("CPU Utilization = %lf%%\n", 100 * (executionMS) / (finishMS - startMS));*/
+/*    fflush(stdout);*/
+/*}*/
 
 int main()
 {
 
-    testMethod();
-    return 0;
     // Get the arbitrary start time of the program to measure difference of time.
     struct timespec processStartTime;
     clock_gettime(CLOCK_MONOTONIC, &processStartTime);
@@ -218,7 +207,8 @@ int main()
     clock_gettime(CLOCK_MONOTONIC, &threadMetric2.releaseTime);
     pthread_create(&thread2, &threadAttr, functionPrint, NULL);
 
-    // Create the second thread and make it run sumAvgProduct
+    // Create the third thread and make it run sumAvgProduct
+    clock_gettime(CLOCK_MONOTONIC, &threadMetric3.releaseTime);
     pthread_create(&thread3, &threadAttr, sumAvgProduct, NULL);
 
     struct sched_param param;
@@ -232,35 +222,31 @@ int main()
     pthread_join(thread2, NULL);
     pthread_join(thread3, NULL);
 
-    //Thread 1
 
     printf("Thread 1 start timestamp: %lfms\n", timespecToMillis(threadMetric1.startTime) - timespecToMillis(processStartTime));
-
     printf("Thread 1 finish timestamp: %lfms\n", timespecToMillis(threadMetric1.finishTime) - timespecToMillis(processStartTime));
-
     printf("Thread 1 wait time: %lfms\n", threadMetric1.waitTime);
-
     printf("Thread 1 execution time: %lfms\n", threadMetric1.executionTime);
-
     printf("Thread 1 Turnaround Time: %lfms\n", threadMetric1.turnaroundTime);
+    printf("Thread 1 CPU Usage: %lf %% \n", threadMetric1.cpuUsage * 100);
 
-    printf("Thread 1 CPU Usage: %lf \% \n", threadMetric1.cpuUsage);
-
-    //Thread 2
+    printf("\n######################################\n");
 
     printf("Thread 2 start timestamp: %lfms\n", timespecToMillis(threadMetric2.startTime) - timespecToMillis(processStartTime));
-
     printf("Thread 2 finish timestamp: %lfms\n", timespecToMillis(threadMetric2.finishTime) - timespecToMillis(processStartTime));
-
     printf("Thread 2 wait time: %lfms\n", threadMetric2.waitTime);
-
     printf("Thread 2 execution time: %lfms\n", threadMetric2.executionTime);
-
     printf("Thread 2 Turnaround Time: %lfms\n", threadMetric2.turnaroundTime);
+    printf("Thread 2 CPU Usage: %lf %% \n", threadMetric2.cpuUsage * 100);
 
-    printf("Thread 2 CPU Usage: %lf \% \n", threadMetric2.cpuUsage);
+    printf("\n######################################\n");
 
+    printf("Thread 3 start timestamp: %lfms\n", timespecToMillis(threadMetric3.startTime) - timespecToMillis(processStartTime));
+    printf("Thread 3 finish timestamp: %lfms\n", timespecToMillis(threadMetric3.finishTime) - timespecToMillis(processStartTime));
+    printf("Thread 3 wait time: %lfms\n", threadMetric3.waitTime);
+    printf("Thread 3 execution time: %lfms\n", threadMetric3.executionTime);
+    printf("Thread 3 Turnaround Time: %lfms\n", threadMetric3.turnaroundTime);
+    printf("Thread 3 CPU Usage: %lf %% \n", threadMetric3.cpuUsage * 100);
 
-    
     return 0;
 }
