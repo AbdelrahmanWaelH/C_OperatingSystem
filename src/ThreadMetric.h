@@ -13,7 +13,7 @@ typedef struct
     double responseTime;
     double turnaroundTime;
     double cpuUsage;
-    size_t memoryUsage;
+    long memoryUsage;
 
 } ThreadMetric;
 
