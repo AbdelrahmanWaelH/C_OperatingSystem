@@ -19,11 +19,12 @@ ThreadMetric threadMetric3;
 // 1 -> FIFO , 2 -> RR
 int SCHEDULE_POLICY;
 
-long get_memory_usage_KB(){
-    struct rusage usage;    
+long get_memory_usage_KB()
+{
+    struct rusage usage;
     // Get resource usage for current thread
     getrusage(RUSAGE_THREAD, &usage);
-    
+
     // Print maximum resident set size (RSS) in KB
     return usage.ru_maxrss;
 }
@@ -72,6 +73,7 @@ void *inBetweenChars(void *arg)
     threadMetric1.turnaroundTime = timespecToMillis(temp);
     threadMetric1.executionTime = threadMetric1.turnaroundTime - threadMetric1.waitTime;
     threadMetric1.responseTime = timespecToMillis(threadMetric1.startTime) - timespecToMillis(threadMetric1.releaseTime);
+    threadMetric2.waitTime += threadMetric2.responseTime;
     threadMetric1.cpuUsage = threadMetric1.executionTime / (threadMetric1.executionTime + threadMetric1.waitTime);
     threadMetric1.memoryUsage = get_memory_usage_KB();
 
@@ -125,12 +127,15 @@ void *sumAvgProduct(void *arg)
     printf("\nThe average is : %.2f\n", average);
 
     clock_gettime(CLOCK_MONOTONIC, &threadMetric3.finishTime);
+
     threadMetric3.waitTime = timespecToMillis(totalWaitTime);
     subtractTimespec(&temp, &threadMetric3.finishTime, &threadMetric3.releaseTime);
     threadMetric3.turnaroundTime = timespecToMillis(temp);
     threadMetric3.executionTime = threadMetric3.turnaroundTime - threadMetric3.waitTime;
     threadMetric3.responseTime = timespecToMillis(threadMetric3.startTime) - timespecToMillis(threadMetric3.releaseTime);
     threadMetric3.cpuUsage = threadMetric3.executionTime / (threadMetric3.executionTime + threadMetric3.waitTime);
+    threadMetric3.waitTime += threadMetric3.responseTime;
+
     threadMetric3.memoryUsage = get_memory_usage_KB();
 
 } // Thread 3 end
@@ -140,7 +145,9 @@ void *functionPrint(void *arg)
     struct timespec inputWaitStart = {0};
     struct timespec inputWaitEnd = {0};
     struct timespec timeDifference = {0};
-    struct timespec totalWaitTime = {0};
+    struct timespec totalWaitTime;
+    totalWaitTime.tv_sec = 0;
+    totalWaitTime.tv_nsec = 0;
     struct timespec temp = {0};
 
     clock_gettime(CLOCK_MONOTONIC, &threadMetric2.startTime);
@@ -159,10 +166,11 @@ void *functionPrint(void *arg)
     threadMetric2.turnaroundTime = timespecToMillis(temp);
     threadMetric2.executionTime = threadMetric2.turnaroundTime - threadMetric2.waitTime;
     threadMetric2.responseTime = timespecToMillis(threadMetric2.startTime) - timespecToMillis(threadMetric2.releaseTime);
+    threadMetric2.waitTime += threadMetric2.responseTime;
     threadMetric2.cpuUsage = threadMetric2.executionTime / (threadMetric2.executionTime + threadMetric2.waitTime);
     threadMetric2.memoryUsage = get_memory_usage_KB();
 
-}// Thread 2 ends
+} // Thread 2 ends
 
 /*void testMethod()*/
 /*{*/
@@ -198,7 +206,7 @@ int main()
     // Get the arbitrary start time of the program to measure difference of time.
     int sched_policy;
     printf("Enter the desired Scheduling technique: \n 1 - First In First Out (Default) \n 2 - Round Robin \n");
-    scanf("%d",&sched_policy);
+    scanf("%d", &sched_policy);
     SCHEDULE_POLICY = sched_policy == 2 ? 2 : 1;
     struct timespec processStartTime;
     clock_gettime(CLOCK_MONOTONIC, &processStartTime);
@@ -220,7 +228,7 @@ int main()
 
     // Set the schedule policy for the threads
     pthread_attr_setschedpolicy(&attr, SCHEDULE_POLICY);
-    
+
     // Find the parameters and schedule priority
     struct sched_param param;
     param.sched_priority = sched_get_priority_max(SCHEDULE_POLICY);
@@ -229,38 +237,40 @@ int main()
 
     // Create the first thread and make it run inBetweenChars
     clock_gettime(CLOCK_MONOTONIC, &threadMetric1.releaseTime);
-    if (pthread_create(&thread1, &attr, inBetweenChars, "Thread1")) {
+    if (pthread_create(&thread1, &attr, inBetweenChars, "Thread1"))
+    {
         perror("Error creating thread1 \n");
         return 1;
     }
 
     // Create the second thread and make it run functionPrint
     clock_gettime(CLOCK_MONOTONIC, &threadMetric2.releaseTime);
-    if (pthread_create(&thread2, &attr, functionPrint, "Thread2")) {
+    if (pthread_create(&thread2, &attr, functionPrint, "Thread2"))
+    {
         perror("Error creating thread2 \n");
         return 1;
     }
 
     // Create the third thread and make it run sumAvgProduct
     clock_gettime(CLOCK_MONOTONIC, &threadMetric3.releaseTime);
-    if (pthread_create(&thread3, &attr, sumAvgProduct, "Thread3")) {
+    if (pthread_create(&thread3, &attr, sumAvgProduct, "Thread3"))
+    {
         perror("Error creating thread3 \n");
         return 1;
     }
-
 
     // Wait for each of the threads to finish
     pthread_join(thread1, NULL);
     pthread_join(thread2, NULL);
     pthread_join(thread3, NULL);
 
-
     printf("Thread 1 start timestamp: %lfms\n", timespecToMillis(threadMetric1.startTime) - timespecToMillis(processStartTime));
     printf("Thread 1 finish timestamp: %lfms\n", timespecToMillis(threadMetric1.finishTime) - timespecToMillis(processStartTime));
     printf("Thread 1 wait time: %lfms\n", threadMetric1.waitTime);
     printf("Thread 1 execution time: %lfms\n", threadMetric1.executionTime);
     printf("Thread 1 Turnaround Time: %lfms\n", threadMetric1.turnaroundTime);
-    printf("Thread 1 Release Time: %lfms\n", threadMetric1.releaseTime);
+    printf("Thread 1 Release Time: %lfms\n", timespecToMillis(threadMetric1.releaseTime) - timespecToMillis(processStartTime));
+    printf("Thread 1 Response Time: %lfms\n", threadMetric1.responseTime);
     printf("Thread 1 CPU Usage: %lf %% \n", threadMetric1.cpuUsage * 100);
     printf("Thread 1 Memory Usage: %ld (KB) \n", threadMetric1.memoryUsage);
 
@@ -271,7 +281,8 @@ int main()
     printf("Thread 2 wait time: %lfms\n", threadMetric2.waitTime);
     printf("Thread 2 execution time: %lfms\n", threadMetric2.executionTime);
     printf("Thread 2 Turnaround Time: %lfms\n", threadMetric2.turnaroundTime);
-    printf("Thread 2 Release Time: %lfms\n", threadMetric2.releaseTime);
+    printf("Thread 2 Release Time: %lfms\n", timespecToMillis(threadMetric2.releaseTime) - timespecToMillis(processStartTime));
+    printf("Thread 2 Response Time: %lfms\n", threadMetric2.responseTime);
     printf("Thread 2 CPU Usage: %lf %% \n", threadMetric2.cpuUsage * 100);
     printf("Thread 2 Memory Usage: %ld (KB) \n", threadMetric2.memoryUsage);
 
@@ -282,7 +293,8 @@ int main()
     printf("Thread 3 wait time: %lfms\n", threadMetric3.waitTime);
     printf("Thread 3 execution time: %lfms\n", threadMetric3.executionTime);
     printf("Thread 3 Turnaround Time: %lfms\n", threadMetric3.turnaroundTime);
-    printf("Thread 3 Release Time: %lfms\n", threadMetric3.releaseTime);
+    printf("Thread 3 Release Time: %lfms\n", timespecToMillis(threadMetric3.releaseTime) - timespecToMillis(processStartTime));
+    printf("Thread 3 Response Time: %lfms\n", threadMetric3.responseTime);
     printf("Thread 3 CPU Usage: %lf %% \n", threadMetric3.cpuUsage * 100);
     printf("Thread 3 Memory Usage: %ld (KB) \n", threadMetric3.memoryUsage);
 
