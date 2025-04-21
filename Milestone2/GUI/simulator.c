@@ -105,86 +105,86 @@ SimulationState * init_simulation_state() {
 }
 
 static void apply_global_css(void) {
-  GtkCssProvider *provider = gtk_css_provider_new();
-  gtk_css_provider_load_from_data(provider,
-      /* Your CSS from the first message */
-      "window { background-color: #1e2229; }"
-    ".main-container { background-color: #262c36; border-radius: 8px; margin: 8px; transition: all 0.3s ease; }"
-    ".main-container:hover { box-shadow: 0 0 10px rgba(103, 232, 249, 0.3); }"
-    ".header { font-size: 18px; font-weight: bold; color: #67e8f9; margin: 8px; padding-bottom: 5px; border-bottom: 1px solid #556; }"
+  // GtkCssProvider *provider = gtk_css_provider_new();
+  // gtk_css_provider_load_from_data(provider,
+  //     /* Your CSS from the first message */
+  //     "window { background-color: #1e2229; }"
+  //   ".main-container { background-color: #262c36; border-radius: 8px; margin: 8px; transition: all 0.3s ease; }"
+  //   ".main-container:hover { box-shadow: 0 0 10px rgba(103, 232, 249, 0.3); }"
+  //   ".header { font-size: 18px; font-weight: bold; color: #67e8f9; margin: 8px; padding-bottom: 5px; border-bottom: 1px solid #556; }"
 
-    ".dashboard-card { background-color: #2d343f; border-radius: 6px; padding: 10px; margin: 5px; transition: transform 0.2s; }"
-    ".dashboard-card:hover { transform: translateY(-2px); background-color: #323a47; }"
+  //   ".dashboard-card { background-color: #2d343f; border-radius: 6px; padding: 10px; margin: 5px; transition: transform 0.2s; }"
+  //   ".dashboard-card:hover { transform: translateY(-2px); background-color: #323a47; }"
 
-    ".process-row { padding: 4px; border-bottom: 1px solid #444; transition: background-color 0.2s; }"
-    ".process-row:hover { background-color: #3a4454; }"
+  //   ".process-row { padding: 4px; border-bottom: 1px solid #444; transition: background-color 0.2s; }"
+  //   ".process-row:hover { background-color: #3a4454; }"
 
-    ".running { background-color: rgba(62, 207, 142, 0.2); border-left: 3px solid #3ecf8e; }"
-    ".blocked { background-color: rgba(240, 62, 62, 0.1); border-left: 3px solid #f03e3e; }"
-    ".ready { background-color: rgba(82, 138, 224, 0.1); border-left: 3px solid #528ae0; }"
+  //   ".running { background-color: rgba(62, 207, 142, 0.2); border-left: 3px solid #3ecf8e; }"
+  //   ".blocked { background-color: rgba(240, 62, 62, 0.1); border-left: 3px solid #f03e3e; }"
+  //   ".ready { background-color: rgba(82, 138, 224, 0.1); border-left: 3px solid #528ae0; }"
 
-    ".memory-cell { background-color: #2a313c; border: 1px solid #444; border-radius: 3px; padding: 5px; margin: 1px; transition: all 0.2s; }"
-    ".memory-cell.used { background-color: #39496a; border-color: #5d7cb8; }"
-    ".memory-cell:hover { transform: scale(1.05); box-shadow: 0 0 5px rgba(103, 232, 249, 0.5); }"
+  //   ".memory-cell { background-color: #2a313c; border: 1px solid #444; border-radius: 3px; padding: 5px; margin: 1px; transition: all 0.2s; }"
+  //   ".memory-cell.used { background-color: #39496a; border-color: #5d7cb8; }"
+  //   ".memory-cell:hover { transform: scale(1.05); box-shadow: 0 0 5px rgba(103, 232, 249, 0.5); }"
 
-    ".control-button { background-color: #2b5a83; color: white; border-radius: 4px; padding: 8px 15px; border: none; transition: all 0.3s; }"
-    ".control-button:hover { background-color: #3a75aa; transform: translateY(-2px); box-shadow: 0 3px 5px rgba(0,0,0,0.2); }"
+  //   ".control-button { background-color: #2b5a83; color: white; border-radius: 4px; padding: 8px 15px; border: none; transition: all 0.3s; }"
+  //   ".control-button:hover { background-color: #3a75aa; transform: translateY(-2px); box-shadow: 0 3px 5px rgba(0,0,0,0.2); }"
 
-    ".start-button { background-color: #2b7a4b; }"
-    ".start-button:hover { background-color: #3a9a64; }"
+  //   ".start-button { background-color: #2b7a4b; }"
+  //   ".start-button:hover { background-color: #3a9a64; }"
 
-    ".stop-button { background-color: #7a2b2b; }"
-    ".stop-button:hover { background-color: #9a3a3a; }"
+  //   ".stop-button { background-color: #7a2b2b; }"
+  //   ".stop-button:hover { background-color: #9a3a3a; }"
 
-    ".reset-button { background-color: #7a5c2b; }"
-    ".reset-button:hover { background-color: #9a753a; }"
+  //   ".reset-button { background-color: #7a5c2b; }"
+  //   ".reset-button:hover { background-color: #9a753a; }"
 
-    ".step-button { background-color: #2b3d7a; }"
-    ".step-button:hover { background-color: #3a50aa; }"
+  //   ".step-button { background-color: #2b3d7a; }"
+  //   ".step-button:hover { background-color: #3a50aa; }"
 
-    ".pulse-animation { animation: pulse 2s infinite; }"
-    "@keyframes pulse {"
-    "  0% { opacity: 1; }"
-    "  50% { opacity: 0.6; }"
-    "  100% { opacity: 1; }"
-    "}"
+  //   ".pulse-animation { animation: pulse 2s infinite; }"
+  //   "@keyframes pulse {"
+  //   "  0% { opacity: 1; }"
+  //   "  50% { opacity: 0.6; }"
+  //   "  100% { opacity: 1; }"
+  //   "}"
 
-    ".log-entry { border-bottom: 1px solid #444; padding: 3px 0; animation: fadeIn 0.5s; }"
-    "@keyframes fadeIn {"
-    "  from { opacity: 0; transform: translateY(-10px); }"
-    "  to { opacity: 1; transform: translateY(0); }"
-    "}"
+  //   ".log-entry { border-bottom: 1px solid #444; padding: 3px 0; animation: fadeIn 0.5s; }"
+  //   "@keyframes fadeIn {"
+  //   "  from { opacity: 0; transform: translateY(-10px); }"
+  //   "  to { opacity: 1; transform: translateY(0); }"
+  //   "}"
 
-    ".status-label { color: #adb5bd; font-size: 12px; }"
-    ".value-label { color: #e9ecef; font-weight: bold; }"
+  //   ".status-label { color: #adb5bd; font-size: 12px; }"
+  //   ".value-label { color: #e9ecef; font-weight: bold; }"
 
-    ".resource-available { color: #40c057; }"
-    ".resource-locked { color: #fa5252; }"
+  //   ".resource-available { color: #40c057; }"
+  //   ".resource-locked { color: #fa5252; }"
 
-    ".combo-box { background-color: #2d343f; border: 1px solid #444; border-radius: 4px; color: white; }"
-    ".scrolled { border: 1px solid #444; border-radius: 4px; }"
+  //   ".combo-box { background-color: #2d343f; border: 1px solid #444; border-radius: 4px; color: white; }"
+  //   ".scrolled { border: 1px solid #444; border-radius: 4px; }"
 
-    ".active-container { animation: highlight 1s; }"
-    "@keyframes highlight {"
-    "  0% { background-color: rgba(103, 232, 249, 0.1); }"
-    "  100% { background-color: transparent; }"
-    "}"
+  //   ".active-container { animation: highlight 1s; }"
+  //   "@keyframes highlight {"
+  //   "  0% { background-color: rgba(103, 232, 249, 0.1); }"
+  //   "  100% { background-color: transparent; }"
+  //   "}"
 
-    /* Tooltips */
-    "tooltip { background-color: #1e2229; color: #e9ecef; }"
+  //   /* Tooltips */
+  //   "tooltip { background-color: #1e2229; color: #e9ecef; }"
 
-    /* Transitions for switching between panels */
-    ".panel-transition { transition: opacity 0.3s, transform 0.3s; }"
-    ".panel-hidden { opacity: 0; transform: translateX(-20px); }"
-    ".panel-visible { opacity: 1; transform: translateX(0); }",
-      -1, NULL);
+  //   /* Transitions for switching between panels */
+  //   ".panel-transition { transition: opacity 0.3s, transform 0.3s; }"
+  //   ".panel-hidden { opacity: 0; transform: translateX(-20px); }"
+  //   ".panel-visible { opacity: 1; transform: translateX(0); }",
+  //     -1, NULL);
 
-  // Apply to the entire application
-  GdkScreen *screen = gdk_screen_get_default();
-  gtk_style_context_add_provider_for_screen(screen,
-                                         GTK_STYLE_PROVIDER(provider),
-                                         GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-  g_object_unref(provider);
+  // // Apply to the entire application
+  // GdkScreen *screen = gdk_screen_get_default();
+  // gtk_style_context_add_provider_for_screen(screen,
+  //                                        GTK_STYLE_PROVIDER(provider),
+  //                                        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  // g_object_unref(provider);
 }
 
 
