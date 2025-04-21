@@ -231,7 +231,7 @@ int main()
 
     // Find the parameters and schedule priority
     struct sched_param param;
-    param.sched_priority = sched_get_priority_max(SCHEDULE_POLICY);
+    param.sched_priority = 20;
     pthread_attr_setschedparam(&attr, &param);
     pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
 

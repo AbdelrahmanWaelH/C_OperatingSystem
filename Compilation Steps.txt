@@ -1,0 +1,7 @@
+In order to compile and run:
+
+cd src
+gcc main.c ThreadMetric.c ThreadUtils.c TimeUtils.c -o main
+sudo ./main
+
+An executable is pre-compiled in case anything goes wrong.
