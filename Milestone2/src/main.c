@@ -67,6 +67,41 @@ typedef struct {
 
 */
 
+void initMemory();
+void loadProcess(char* filepath);
+
+SchedulingPolicy policy;
+
+char* filepathA = "";
+char* filepathB = "";
+char* filepathC = "";
+
 int main(){
+
+    // Prompt user for scheduling algo.
+    initMemory();
+    loadProcess(filepathA);
+    loadProcess(filepathB);
+    loadProcess(filepathC);
+
+    switch (policy)
+    {
+    case FCFS:
+        runFCFS();
+        break;   
+    case RR:
+        runRR();
+        break;    
+    case MLFQ:
+        runMLFQ();
+        break;
+    default:
+        break;
+    }
+    
+    //byebye
+
+        
+
 
 }
