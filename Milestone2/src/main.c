@@ -194,8 +194,7 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock){
         char* target = tokens[1];
         char* value = tokens[2];
 
-        if(strcmp(value, "readfile") == 0){
-
+        if(strcmp(value, "readFile") == 0){
             /*
             Handle Case for 
                 assign a readfile b
@@ -217,6 +216,7 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock){
                 strcpy(mainMemory.memoryArray[processControlBlock->memory_start + 8].data, fileString);
             }
 
+
         }else if (strcmp(value, "input\n") == 0){
 
             /*
@@ -224,14 +224,12 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock){
                 assign a input
             */
 
-            char userInputValue[64];
+            char userInputValue[64] = {0};
             printf("Please enter a value:\n");
-            //scanf("%s", userInputValue);
-            char* buffer = malloc(64);
-            fgets(buffer, 64, stdin);
+            char buffer[64] = {0};
+            fgets(buffer, 63, stdin);
             buffer[strcspn(buffer, "\r\n")] = '\0';
             strcpy(userInputValue, buffer);
-
             
 
             if(strcmp(target, "a") == 0){
