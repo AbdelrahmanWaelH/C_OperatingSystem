@@ -12,4 +12,5 @@ add_executable(Milestone2OS
     Scheduler.c
     SchedulerTest.c
     Task.c
+    Semaphores.c
 )

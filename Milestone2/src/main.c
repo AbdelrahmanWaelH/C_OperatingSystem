@@ -4,7 +4,8 @@
 #include <stdio.h>
 #include "../include/Queue.h"
 #include "../include/FileReader.h"
-#include "../include/Semaphores.h"
+#include "../include/Scheduler.h"
+
 
 #define CODE_SEGMENT_OFFSET 9
 

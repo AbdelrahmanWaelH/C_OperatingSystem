@@ -1,4 +1,6 @@
 #include "../include/Scheduler.h"
+#include "../include/Semaphores.h"
+
 #include <stdlib.h>
 #include <stdarg.h>
 
