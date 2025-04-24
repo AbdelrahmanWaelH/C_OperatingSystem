@@ -30,6 +30,11 @@ void *queue_pop_head(Queue *q) {
     return data;
 }
 
+void *queue_peek_head(Queue *q) {
+    if (!q->head) return NULL;
+    return q->head->data;
+}
+
 int queue_is_empty(Queue *q) { return q->length == 0; }
 int queue_length(Queue *q) { return q->length; }
 

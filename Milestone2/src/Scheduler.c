@@ -33,42 +33,51 @@ void scheduler_step(Scheduler *sched) {
     switch (sched->type) {
         case SCHED_FCFS: {
             if (!queue_is_empty(sched->input_queues[0])) {
-                Task *task = (Task *)queue_pop_head(sched->input_queues[0]);
-                while (!task->run(task));
-                queue_push_tail(sched->output_queue, task);
+                Task *task = (Task *)queue_peek_head(sched->input_queues[0]);
+                int done = task->run(task);
+                if (done) {
+                    queue_pop_head(sched->input_queues[0]);
+                    queue_push_tail(sched->output_queue, task);
+                }
             }
             break;
         }
+
         case SCHED_RR: {
             if (!queue_is_empty(sched->input_queues[0])) {
-                Task *task = (Task *)queue_pop_head(sched->input_queues[0]);
-                int done = 0;
-                for (int i = 0; i < sched->rr_quantum; i++) {
-                    done = task->run(task);
-                    if (done) break;
-                }
-                if (done)
+                Task *task = (Task *)queue_peek_head(sched->input_queues[0]);
+                int done = task->run(task);
+                task->timeslice_used++;
+                if (done) {
+                    queue_pop_head(sched->input_queues[0]);
                     queue_push_tail(sched->output_queue, task);
-                else
+                } else if (task->timeslice_used >= sched->rr_quantum) {
+                    task->timeslice_used = 0;
+                    queue_pop_head(sched->input_queues[0]);
                     queue_push_tail(sched->input_queues[0], task);
+                }
             }
             break;
         }
+
         case SCHED_MLFQ: {
             for (int level = 0; level < MLFQ_LEVELS; level++) {
                 if (!queue_is_empty(sched->input_queues[level])) {
-                    Task *task = (Task *)queue_pop_head(sched->input_queues[level]);
-                    int done = 0;
-                    for (int i = 0; i < sched->mlfq_quantum[level]; i++) {
-                        done = task->run(task);
-                        if (done) break;
-                    }
+                    Task *task = (Task *)queue_peek_head(sched->input_queues[level]);
+                    
+                    int done = task->run(task);
+                    task->timeslice_used++;
+                                        
                     if (done) {
+                        task = (Task *)queue_pop_head(sched->input_queues[level]);
+                        task->timeslice_used = 0;
                         queue_push_tail(sched->output_queue, task);
-                    } else {
+                    } else if (task->timeslice_used >= sched->mlfq_quantum[level]) {
+                        task = (Task *)queue_pop_head(sched->input_queues[level]);
+                        task->timeslice_used = 0;
                         int next_level = (level < MLFQ_LEVELS - 1) ? level + 1 : level;
                         queue_push_tail(sched->input_queues[next_level], task);
-                    }
+                    }       
                     break;
                 }
             }
@@ -76,6 +85,7 @@ void scheduler_step(Scheduler *sched) {
         }
     }
 }
+
 
 Task *scheduler_fetch_output(Scheduler *sched) {
     return (Task *)queue_pop_head(sched->output_queue);

@@ -6,6 +6,7 @@ typedef struct Task {
     const char *name;
     int runtime;
     int total_required;
+    int timeslice_used;
     int (*run)(struct Task *task);
 } Task;
 
