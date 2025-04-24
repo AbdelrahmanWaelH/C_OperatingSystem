@@ -107,21 +107,39 @@ Memory mainMemory;
 Queue readyQueue;
 Queue blockedQueue;
 
-char* filepathA =  "Program_1.txt";
-char* filepathB = "";
-char* filepathC = "";
+char* filepathA = "../Program_1.txt";
+char* filepathB = "../Program_2.txt";
+char* filepathC = "../Program_3.txt";
 
 int main(){
 
     // Prompt user for scheduling algo.
     initMemory();
+    initSemaphores();
     ProcessControlBlock pcbA = loadProcess(filepathA);
+    ProcessControlBlock pcbB = loadProcess(filepathB);
+    ProcessControlBlock pcbC = loadProcess(filepathC);
 
     while(pcbA.program_counter + CODE_SEGMENT_OFFSET <= pcbA.memory_end){
         executeSingleLinePCB(&pcbA);
     }
 
-    // displayMemory(&mainMemory);
+    printf("\n==Finished A==\n");
+    
+    while(pcbB.program_counter + CODE_SEGMENT_OFFSET <= pcbB.memory_end){
+        executeSingleLinePCB(&pcbB);
+    }
+    
+    printf("\n==Finished B==\n");
+    
+    while(pcbC.program_counter + CODE_SEGMENT_OFFSET <= pcbC.memory_end){
+        executeSingleLinePCB(&pcbC);
+    }
+    
+    printf("\n==Finished C==\n");
+
+
+    displayMemory(&mainMemory);
 
 
 
@@ -176,6 +194,9 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock){
         char* target = tokens[1];
         char* value = tokens[2];
 
+        value[strcspn(value, "\r\n")] = '\0';
+
+
         if(strcmp(value, "readFile") == 0){
             /*
             Handle Case for 
@@ -217,7 +238,7 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock){
             }
 
 
-        }else if (strcmp(value, "input\n") == 0){
+        }else if (strcmp(value, "input") == 0){
 
             /*
             Handle Case for 

@@ -1,5 +1,4 @@
 #include "../include/Scheduler.h"
-#include "../include/Semaphores.h"
 #include <stdlib.h>
 #include <stdarg.h>
 
@@ -103,12 +102,3 @@ void scheduler_free(Scheduler *sched) {
 }
 
 
-void is_free(){
-
-    int val;
-    sem_getvalue(&userInputSemaphore, &val);
-
-    if(val == 0); // not free
-    else ; //free
-
-}
