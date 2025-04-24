@@ -152,14 +152,6 @@ int main(){
     // default:
     //     break;
     // }
-
-
-
-    
-
-
-        
-
 }
 
 void initSemaphores(){
@@ -321,12 +313,13 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock){
     else if (strcmp(tokens[0], "semWait") == 0) {
         char* resource = tokens[1];
         int semValue;
-
+        int *pid = malloc(sizeof(int));
+        *pid = processControlBlock->id;
         if(strcmp(resource, "file") == 0){
 
             sem_getvalue(&fileSemaphore, &semValue);
             if(semValue == 0) {
-                Q_enqueue(&(blockedQueue.blockedQueue), processControlBlock->id);
+                queue_push_tail(&(blockedQueue.blockedQueue), pid);
             }else{
                 safe_sem_wait(&fileSemaphore);
             }
@@ -334,14 +327,14 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock){
         }else if (strcmp(resource, "userInput")){
             sem_getvalue(&userInputSemaphore, &semValue);
             if(semValue == 0) {
-                Q_enqueue(&(blockedQueue.blockedQueue), processControlBlock->id);
+                queue_push_tail(&(blockedQueue.blockedQueue), pid);
             }else{
                 safe_sem_wait(&userInputSemaphore);
             }
         }else if (strcmp(resource, "userOutput")){
             sem_getvalue(&userOutputSemaphore, &semValue);
             if(semValue == 0) {
-                Q_enqueue(&(blockedQueue.blockedQueue), processControlBlock->id);
+                queue_push_tail(&(blockedQueue.blockedQueue), pid);
             }else{
                 safe_sem_wait(&userOutputSemaphore);
             }

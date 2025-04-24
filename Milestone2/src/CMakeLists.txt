@@ -9,5 +9,7 @@ add_executable(Milestone2OS
     main.c
     Queue.c
     FileReader.c
+    Scheduler.c
+    SchedulerTest.c
+    Task.c
 )
-

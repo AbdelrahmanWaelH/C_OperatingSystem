@@ -1,53 +1,39 @@
-#include <stdbool.h>
-#include <stdio.h>
+#include<stdio.h>
+#include <stdlib.h>
 #include "../include/Queue.h"
 
-
-void Q_init(Queue* q){
-
-    q->count = 0;
-    for(int i = 0; i < 32; i++){
-        q->arr[i] = 0;
-    }
-
+Queue *queue_new() {
+    Queue *q = (Queue *)malloc(sizeof(Queue));
+    q->head = q->tail = NULL;
+    q->length = 0;
+    return q;
 }
 
-void Q_enqueue(Queue* q, int val){
-    q->arr[q->count++] = val;
+void queue_push_tail(Queue *q, void *data) {
+    Node *n = (Node *)malloc(sizeof(Node));
+    n->data = data;
+    n->next = NULL;
+    if (!q->tail) q->head = n;
+    else q->tail->next = n;
+    q->tail = n;
+    q->length++;
 }
 
-int Q_dequeue(Queue* q){
-
-    int retVal = q->arr[q->count];
-
-    for(int i = 1; i < q->count; i++){
-        q->arr[i-1] = q->arr[i];
-    }
-
-    q->count--;
-    return retVal;
-
+void *queue_pop_head(Queue *q) {
+    if (!q->head) return NULL;
+    Node *n = q->head;
+    void *data = n->data;
+    q->head = n->next;
+    if (!q->head) q->tail = NULL;
+    free(n);
+    q->length--;
+    return data;
 }
 
-bool Q_isFull(Queue* q){
-    return q->count == 32;
+int queue_is_empty(Queue *q) { return q->length == 0; }
+int queue_length(Queue *q) { return q->length; }
+
+void queue_free(Queue *q) {
+    while (!queue_is_empty(q)) queue_pop_head(q);
+    free(q);
 }
-
-bool Q_isEmpty(Queue* q){
-    return q->count == 0;
-}
-
-int Q_getFirst(Queue* q){
-    return q->arr[0];
-}
-
-void Q_display(Queue* q){
-
-    for(int i = 0; i < q->count-1; i++){
-        printf("%d, ", q->arr[i]);
-    }
-    printf("%d\n", q->arr[q->count-1]);
-
-
-}
-

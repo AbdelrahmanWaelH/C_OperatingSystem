@@ -1,17 +1,24 @@
-#include <stdbool.h>
-#include <stdio.h>
+#ifndef QUEUE_H
+#define QUEUE_H
 
-typedef struct {
+#include <stdlib.h>
 
-    int arr[32];
-    int count;
+typedef struct Node {
+    void *data;
+    struct Node *next;
+} Node;
 
+typedef struct Queue {
+    Node *head;
+    Node *tail;
+    int length;
 } Queue;
 
-void Q_init(Queue* q);
-void Q_enqueue(Queue* q, int val);
-int Q_dequeue(Queue* q);
-bool Q_isFull(Queue* q);
-bool Q_isEmpty(Queue* q);
-int Q_getFirst(Queue* q);
+Queue *queue_new();
+void queue_push_tail(Queue *q, void *data);
+void *queue_pop_head(Queue *q);
+int queue_is_empty(Queue *q);
+int queue_length(Queue *q);
+void queue_free(Queue *q);
 
+#endif
