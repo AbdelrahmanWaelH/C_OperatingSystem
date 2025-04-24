@@ -42,8 +42,8 @@ typedef struct {
 
 typedef struct {
 
-    char name[64];
-    char data[64];
+    char name[256];
+    char data[256];
 
 } MemoryWord;
 
@@ -71,6 +71,9 @@ typedef struct {
 
 */
 
+extern sem_t userInputSemaphore;
+extern sem_t userOutputSemaphore;
+extern sem_t fileSemaphore;
 
 
 void removeNewline(char* buffer) {
@@ -80,6 +83,19 @@ void removeNewline(char* buffer) {
         buffer[length - 1] = '\0';
     }
 }
+
+// void initSemaphores(){
+
+//     if (sem_init(&userInputSemaphore, 0, 1) == -1) {
+//         perror("sem_init userInput");
+//         exit(EXIT_FAILURE);
+//     }    
+//     sem_init(&userOutputSemaphore, 0, 1);
+//     sem_init(&fileSemaphore, 0, 1);
+
+
+// }
+
 
 
 
@@ -107,6 +123,8 @@ Memory mainMemory;
 Queue readyQueue;
 Queue blockedQueue;
 
+
+
 char* filepathA = "../Program_1.txt";
 char* filepathB = "../Program_2.txt";
 char* filepathC = "../Program_3.txt";
@@ -120,26 +138,45 @@ int main(){
     ProcessControlBlock pcbB = loadProcess(filepathB);
     ProcessControlBlock pcbC = loadProcess(filepathC);
 
-    while(pcbA.program_counter + CODE_SEGMENT_OFFSET <= pcbA.memory_end){
+
+    while(pcbA.program_counter + CODE_SEGMENT_OFFSET + pcbA.memory_start <= pcbA.memory_end){
         executeSingleLinePCB(&pcbA);
     }
 
     printf("\n==Finished A==\n");
     
-    while(pcbB.program_counter + CODE_SEGMENT_OFFSET <= pcbB.memory_end){
+    while(pcbB.program_counter + CODE_SEGMENT_OFFSET + pcbB.memory_start <= pcbB.memory_end){
         executeSingleLinePCB(&pcbB);
     }
     
     printf("\n==Finished B==\n");
+
+    // int val1;
+    // int val2;
+    // int val3;
+
+    // printf("Getting sem values...\n");
+
+    // sem_getvalue(&userInputSemaphore, &val1);
+    // sem_getvalue(&userOutputSemaphore, &val2);
+    // sem_getvalue(&fileSemaphore, &val3);
     
-    while(pcbC.program_counter + CODE_SEGMENT_OFFSET <= pcbC.memory_end){
+    // printf("Semaphore values: %d, %d, %d\n", val1, val2, val3);
+
+    // printf("Done\n");
+
+    
+    while(pcbC.program_counter + CODE_SEGMENT_OFFSET + pcbC.memory_start <= pcbC.memory_end){
         executeSingleLinePCB(&pcbC);
     }
-    
+
     printf("\n==Finished C==\n");
+    //displayMemory(&mainMemory);
 
 
-    displayMemory(&mainMemory);
+    
+
+
 
 
 
@@ -176,7 +213,6 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock){
     int currentLine = memoryStart + processControlBlock->program_counter + CODE_SEGMENT_OFFSET;
     
     char* line = mainMemory.memoryArray[currentLine].data;
-    // printf("Executing: %s", line);
     char** tokens = lineParser(line);
 
     // printf("Currently at PC: %d\n", processControlBlock->program_counter);
@@ -207,7 +243,7 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock){
             //removeNewline(filepathVar);
             filepathVar[strcspn(filepathVar, "\r\n")] = '\0';
 
-            char filepath[64];
+            char filepath[256];
 
             if(strcmp(filepathVar, "a") == 0){
                 //mainMemory.memoryArray[processControlBlock->memory_start + 6].data = fileString;
@@ -223,6 +259,8 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock){
 
 
             char* fileString = readFile(filepath);
+
+            // printf("Read File String: %s", fileString);
 
             // printf("Found file path\n");
 
@@ -245,10 +283,10 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock){
                 assign a input
             */
 
-            char userInputValue[64] = {0};
+            char userInputValue[256] = {0};
             printf("Please enter a value:\n");
-            char buffer[64] = {0};
-            fgets(buffer, 64, stdin);
+            char buffer[256] = {0};
+            fgets(buffer, 256, stdin);
             buffer[strcspn(buffer, "\r\n")] = '\0';
             strcpy(userInputValue, buffer);
             
@@ -296,13 +334,13 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock){
     }
     else if (strcmp(tokens[0], "print") == 0) {
         char* value = tokens[1];
-        char data[64];
+        char data[256];
 
-        if(strcmp(value, "a\n") == 0){
+        if(strcmp(value, "a") == 0){
             //mainMemory.memoryArray[processControlBlock->memory_start + 6].data = userInputValue;
             strcpy(data, mainMemory.memoryArray[processControlBlock->memory_start + 6].data);
             
-        }else if (strcmp(value, "b\n") == 0){
+        }else if (strcmp(value, "b\r\n") == 0){
             //mainMemory.memoryArray[processControlBlock->memory_start + 7].data = userInputValue;
             strcpy(data, mainMemory.memoryArray[processControlBlock->memory_start + 7].data);
         }else {
@@ -364,7 +402,7 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock){
                 safe_sem_wait(&fileSemaphore);
             }
             
-        }else if (strcmp(resource, "userInput")){
+        }else if (strcmp(resource, "userInput") == 0){
             sem_getvalue(&userInputSemaphore, &semValue);
             if(semValue == 0) {
                 queue_push_tail(&blockedQueue, pid); // {pid, RESOURCE_X};
@@ -374,7 +412,7 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock){
             }else{
                 safe_sem_wait(&userInputSemaphore);
             }
-        }else if (strcmp(resource, "userOutput")){
+        }else if (strcmp(resource, "userOutput") == 0){
             sem_getvalue(&userOutputSemaphore, &semValue);
             if(semValue == 0) {
                 queue_push_tail(&blockedQueue, pid);
@@ -419,6 +457,7 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock){
 
         FILE* newFile = fopen(filename, "w");
         fprintf(newFile, "%s", dataToWrite);
+        fflush(newFile);
 
     }
 
@@ -431,6 +470,7 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock){
 
     processControlBlock->program_counter += 1;
 
+
     
 
 }
@@ -439,7 +479,7 @@ char** lineParser(char* line){
 
     char** tokenArray = (char**)malloc(sizeof(char*) * 16); //Assuming maximum of 8 tokens per line.
 
-    char lineCopy[strlen(line)];
+    char lineCopy[strlen(line) + 10];
     strcpy(lineCopy, line);
     char* token = strtok(lineCopy, " ");
 
@@ -511,7 +551,6 @@ ProcessControlBlock loadProcess(char* filepath){
     processIdCounter++;
 
     pcb.memory_start = indexOfFree;
-    pcb.memory_end = indexOfFree + 20;
 
     pcb.priority = 1;
 
@@ -519,7 +558,7 @@ ProcessControlBlock loadProcess(char* filepath){
 
     pcb.state = READY;
 
-    char* buffer = malloc(64);
+    char* buffer = malloc(256);
 
     //mainMemory.memoryArray[pcb.memory_start + 0].name = "pid";
     strcpy(mainMemory.memoryArray[pcb.memory_start + 0].name, "pid");
@@ -567,13 +606,13 @@ ProcessControlBlock loadProcess(char* filepath){
     
     int code_segment_line = 0;
     
-    while(fgets(buffer, 64, code_file)){
+    while(fgets(buffer, 256, code_file)){
         
         strcpy(mainMemory.memoryArray[pcb.memory_start + CODE_SEGMENT_OFFSET + code_segment_line].name, "code");
-        //memcpy(mainMemory.memoryArray[pcb.memory_start + CODE_SEGMENT_OFFSET + code_segment_line].data, buffer, 64);
+        //memcpy(mainMemory.memoryArray[pcb.memory_start + CODE_SEGMENT_OFFSET + code_segment_line].data, buffer, 256);
         //printf("Buffer: %c\n", buffer[7]);
 
-        for(int i = 0; i < 64; i++){
+        for(int i = 0; i < 256; i++){
             mainMemory.memoryArray[pcb.memory_start + CODE_SEGMENT_OFFSET + code_segment_line].data[i] = buffer[i];
         }
         
@@ -581,6 +620,12 @@ ProcessControlBlock loadProcess(char* filepath){
     }
     code_segment_line--;
     pcb.memory_end = pcb.memory_start + CODE_SEGMENT_OFFSET + code_segment_line;
+    printf("PID: %d, Start: %d, Lines of Code: %d, Memory End: %d\n", pcb.id, pcb.memory_start, code_segment_line, pcb.memory_end);
+
+    strcpy(mainMemory.memoryArray[pcb.memory_start + 2].name, "mem_end");
+    sprintf(buffer, "%d", pcb.memory_end);
+    strcpy(mainMemory.memoryArray[pcb.memory_start + 2].data, buffer);
+    
 
     return pcb;
 
