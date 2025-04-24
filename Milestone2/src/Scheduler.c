@@ -1,4 +1,5 @@
 #include "../include/Scheduler.h"
+#include "../include/Semaphores.h"
 #include <stdlib.h>
 #include <stdarg.h>
 
@@ -20,7 +21,10 @@ Scheduler *scheduler_new(SchedulerType type, ...) {
     for (int i = 0; i < MLFQ_LEVELS; i++)
         s->mlfq_quantum[i] = base << i; // 1, 2, 4, 8
     return s;
+
 }
+
+//task->run <==> executeSingleLinePCB(pcb)
 
 void scheduler_add_task(Scheduler *sched, Task *task) {
     if (sched->type == SCHED_MLFQ)
@@ -96,4 +100,15 @@ void scheduler_free(Scheduler *sched) {
         queue_free(sched->input_queues[i]);
     queue_free(sched->output_queue);
     free(sched);
+}
+
+
+void is_free(){
+
+    int val;
+    sem_getvalue(&userInputSemaphore, &val);
+
+    if(val == 0); // not free
+    else ; //free
+
 }
