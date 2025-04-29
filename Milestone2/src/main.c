@@ -61,6 +61,11 @@ typedef struct {
 extern sem_t userInputSemaphore;
 extern sem_t userOutputSemaphore;
 extern sem_t fileSemaphore;
+
+ProcessControlBlock* userInputBlockingProcess;
+ProcessControlBlock* userOutputBlockingProcess;
+ProcessControlBlock* fileBlockingProcess;
+
 int processIdCounter = 0;
 
 void removeNewline(char* buffer)
@@ -93,6 +98,7 @@ char* select_file_dialog(GtkWidget *parent_window);
  extern void initMemory();
  extern void initSemaphores();
  extern void displayMemory(Memory* mainMemory);
+ char* resourceToString(Resource resource);
 
  // Global variables
  GtkWidget *window;
@@ -1012,14 +1018,44 @@ static void update_resource_management() {
     gtk_label_set_text(GTK_LABEL(user_output_status), userOutputValue > 0 ? "Free" : "Locked");
     gtk_label_set_text(GTK_LABEL(file_status), fileValue > 0 ? "Free" : "Locked");
 
-    // Update holders (this would require additional tracking in your scheduler)
-    // For simplicity, we'll just display "Process X" if locked
-    gtk_label_set_text(GTK_LABEL(user_input_holder),
-                      userInputValue > 0 ? "None" : "Process X");
-    gtk_label_set_text(GTK_LABEL(user_output_holder),
-                      userOutputValue > 0 ? "None" : "Process Y");
-    gtk_label_set_text(GTK_LABEL(file_holder),
-                      fileValue > 0 ? "None" : "Process Z");
+	if (userInputValue > 0) {
+		userInputBlockingProcess = NULL;
+	}
+
+	if (userOutputValue > 0) {
+		userOutputBlockingProcess = NULL;
+	}
+
+	if (fileValue > 0) {
+		fileBlockingProcess = NULL;
+	}
+
+	char buffer[100];
+
+	// For user input
+	if (userInputBlockingProcess == NULL) {
+		gtk_label_set_text(GTK_LABEL(user_input_holder), "None");
+	} else {
+		snprintf(buffer, sizeof(buffer), "Process %d", userInputBlockingProcess->id);
+		gtk_label_set_text(GTK_LABEL(user_input_holder), buffer);
+	}
+
+	// For user output
+	if (userOutputBlockingProcess == NULL) {
+		gtk_label_set_text(GTK_LABEL(user_output_holder), "None");
+	} else {
+		snprintf(buffer, sizeof(buffer), "Process %d", userOutputBlockingProcess->id);
+		gtk_label_set_text(GTK_LABEL(user_output_holder), buffer);
+	}
+
+	// For file
+	if (fileBlockingProcess == NULL) {
+		gtk_label_set_text(GTK_LABEL(file_holder), "None");
+	} else {
+		snprintf(buffer, sizeof(buffer), "Process %d", fileBlockingProcess->id);
+		gtk_label_set_text(GTK_LABEL(file_holder), buffer);
+	}
+
 
     // Populate blocked resources list
     // This would depend on how your system tracks blocked processes
@@ -1034,7 +1070,7 @@ static void update_resource_management() {
 
             gtk_list_store_set(blocked_resources_store, &iter,
                               0, pcb->id,
-                              1, pcb->blockedResource,
+                              1, resourceToString(pcb->blockedResource),
                               2, pcb->priority,
                               -1);
         }
@@ -1297,6 +1333,10 @@ static void on_reset_button_clicked(GtkButton *button, gpointer user_data) {
     // Reinitialize memory and semaphores
     initMemory();
     initSemaphores();
+	// reset the sempahore locked processes
+	fileBlockingProcess = NULL;
+	userOutputBlockingProcess = NULL;
+	userInputBlockingProcess = NULL;
 
     // Clear all displays
     gtk_list_store_clear(process_list_store);
@@ -1729,44 +1769,46 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock)
 		int semValue;
 		int* pid = malloc(sizeof(int));
 		*pid = processControlBlock->id;
-		if (strcmp(resource, "file") == 0) {
-
+		if (strcmp(resource, "file\r\n") == 0 || strcmp(resource, "file") == 0) {
 			sem_getvalue(&fileSemaphore, &semValue);
 			if (semValue == 0) {
 				processControlBlock->state = BLOCKED;
 				processControlBlock->blockedResource = FILE_RW;
 				return;
 			} else {
+				fileBlockingProcess = processControlBlock;
 				safe_sem_wait(&fileSemaphore);
 			}
 
-		} else if (strcmp(resource, "userInput") == 0) {
+		} else if (strcmp(resource, "userInput\r\n") == 0 || strcmp(resource, "userInput") == 0) {
 			sem_getvalue(&userInputSemaphore, &semValue);
 			if (semValue == 0) {
 				processControlBlock->state = BLOCKED;
 				processControlBlock->blockedResource = USER_INPUT;
 				return;
 			} else {
+				userInputBlockingProcess = processControlBlock;
 				safe_sem_wait(&userInputSemaphore);
 			}
-		} else if (strcmp(resource, "userOutput") == 0) {
+		} else if (strcmp(resource, "userOutput\r\n") == 0 || strcmp(resource, "userOutput") == 0) {
 			sem_getvalue(&userOutputSemaphore, &semValue);
 			if (semValue == 0) {
 				processControlBlock->state = BLOCKED;
 				processControlBlock->blockedResource = USER_OUTPUT;
 				return;
 			} else {
+				userOutputBlockingProcess = processControlBlock;
 				safe_sem_wait(&userOutputSemaphore);
 			}
 		}
 
 	} else if (strcmp(tokens[0], "semSignal") == 0) {
 		char* resource = tokens[1];
-		if (strcmp(resource, "file") == 0) {
+		if (strcmp(resource, "file\r\n") == 0 || strcmp(resource, "file") == 0) {
 			safe_sem_post(&fileSemaphore);
-		} else if (strcmp(resource, "userInput")) {
+		} else if (strcmp(resource, "userInput\r\n") == 0 || strcmp(resource, "userInput") == 0) {
 			safe_sem_post(&userInputSemaphore);
-		} else if (strcmp(resource, "userOutput")) {
+		} else if (strcmp(resource, "userOutput\r\n") == 0 || strcmp(resource, "userOutput") == 0) {
 			safe_sem_post(&userOutputSemaphore);
 		}
 
@@ -1984,6 +2026,28 @@ char* processToString(ProcessState state)
 
         default:
             break;
+	}
+}
+
+char* resourceToString(Resource resource){
+	switch (resource) {
+		case USER_INPUT:
+			return "User Input";
+			break;
+
+		case USER_OUTPUT:
+			return "User Output";
+			break;
+
+		case FILE_RW:
+			return "File";
+			break;
+		case NIL:
+			return "None";
+			break;
+
+		default:
+			break;
 	}
 }
 
