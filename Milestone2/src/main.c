@@ -1058,27 +1058,46 @@ char* get_user_input_from_dialog(int process_id) {
 }
 
 void show_text_dialog(const char *text) {
-    GtkWidget *dialog, *content_area, *label;
-    GtkDialogFlags flags = GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT;
+	GtkWidget *dialog, *content_area, *label;
+	GtkDialogFlags flags = GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT;
+	char *token;
+	char *text_copy = strdup(text);  // Make a copy since strtok modifies the string
+	char display_text[1024] = "";    // Buffer for formatted output
+	int count = 0;
 
-    // Create dialog
-    dialog = gtk_dialog_new_with_buttons("Message",
-                                         GTK_WINDOW(window),
-                                         flags,
-                                         "OK", GTK_RESPONSE_ACCEPT,
-                                         NULL);
+	// Split the text on spaces and format with 10 words per line
+	token = strtok(text_copy, " ");
+	while (token != NULL) {
+		// Add the token to the display text
+		strcat(display_text, token);
+		strcat(display_text, " ");  // Add space between words
 
-    // Add content
-    content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
-    label = gtk_label_new(text);
+		count++;
+		if (count % 10 == 0) {  // After every 10 words
+			strcat(display_text, "\n");  // Add a newline
+		}
+		token = strtok(NULL, " ");
+	}
 
-    gtk_container_add(GTK_CONTAINER(content_area), label);
-    gtk_widget_show_all(dialog);
+	// Create dialog
+	dialog = gtk_dialog_new_with_buttons("Message",
+										GTK_WINDOW(window),
+										flags,
+										"OK", GTK_RESPONSE_ACCEPT,
+										NULL);
 
-    // Wait for user to press OK
-    gtk_dialog_run(GTK_DIALOG(dialog));
+	// Add content
+	content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+	label = gtk_label_new(display_text);
+	gtk_container_add(GTK_CONTAINER(content_area), label);
+	gtk_widget_show_all(dialog);
 
-    gtk_widget_destroy(dialog);
+	// Wait for user to press OK
+	gtk_dialog_run(GTK_DIALOG(dialog));
+	gtk_widget_destroy(dialog);
+
+	// Free the duplicated string
+	free(text_copy);
 }
 
 static void update_process_list() {
@@ -1825,11 +1844,11 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock)
             if(strcmp(target, mainMemory.memoryArray[processControlBlock->memory_start + i].name) ==0){
                 break;
             }
-
-            if(strlen(mainMemory.memoryArray[processControlBlock->memory_start+i].name)==0){
+			printf("%d",strlen(mainMemory.memoryArray[processControlBlock->memory_start+i].name));
+            if(strlen(mainMemory.memoryArray[processControlBlock->memory_start+i].data)==0){
                 strcpy(mainMemory.memoryArray[processControlBlock->memory_start+i].name, target);
+            	break;
             }
-
         }
 
 
@@ -1997,8 +2016,8 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock)
 		int startInt = atoi(dataStart);
 		int endInt = atoi(dataEnd);
 
-        char buffer[256];
-        sprintf(buffer, "Numbers from %d to %d:", startInt, endInt);
+        char buffer[4096];
+        sprintf(buffer, "Numbers from %d to %d: \n", startInt, endInt);
         for (int i = startInt; i <= endInt; i++) {
             char num[16];
             sprintf(num, " %d", i);
@@ -2095,6 +2114,7 @@ char** lineParser(char* line)
 		= (char**)malloc(sizeof(char*) * 16); // Assuming maximum of 8 tokens per line.
 
 	char lineCopy[strlen(line) + 10];
+	line[strcspn(line, "\r\n")] = '\0';
 	strcpy(lineCopy, line);
 	char* token = strtok(lineCopy, " ");
 
@@ -2205,9 +2225,9 @@ ProcessControlBlock loadProcess(char* filepath)
 	sprintf(buffer, "%s", processToString(pcb.state));
 	strcpy(mainMemory.memoryArray[pcb.memory_start + 5].data, buffer);
 
-	strcpy(mainMemory.memoryArray[pcb.memory_start + 6].name, "");
-	strcpy(mainMemory.memoryArray[pcb.memory_start + 7].name, "");
-	strcpy(mainMemory.memoryArray[pcb.memory_start + 8].name, "");
+	strcpy(mainMemory.memoryArray[pcb.memory_start + 6].name, "Var");
+	strcpy(mainMemory.memoryArray[pcb.memory_start + 7].name, "Var");
+	strcpy(mainMemory.memoryArray[pcb.memory_start + 8].name, "Var");
 
 	FILE* code_file = fopen(filepath, "r");
 
