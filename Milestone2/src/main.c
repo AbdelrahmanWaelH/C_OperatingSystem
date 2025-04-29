@@ -202,6 +202,233 @@ const char *css_data =
 ".memory-cell { border: 1px solid #555; padding: 4px; font-family: monospace; background-color: #3d3d3d; color: #e0e0e0; }"
 ".memory-cell-used { background-color: #264f78; }";
 
+//new css
+// Complete CSS for the OS Scheduler Simulation with enforced dark theme across all components
+// const char *css_data = 
+// "@define-color bg_color #2d2d2d;"
+// "@define-color fg_color #e0e0e0;"
+// "@define-color base_color #3d3d3d;"
+// "@define-color text_color #e0e0e0;"
+// "@define-color selected_bg_color #0078d7;"
+// "@define-color selected_fg_color white;"
+// "@define-color tooltip_bg_color #2d2d2d;"
+// "@define-color tooltip_fg_color #e0e0e0;"
+
+// /* Basic theme colors for all widgets */
+// "* {"
+// "    color: @fg_color;"
+// "    border-color: #555;"
+// "    background-color: @bg_color;"
+// "}"
+
+// /* Window and general containers */
+// "window, dialog {"
+// "    background-color: @bg_color;"
+// "    color: @fg_color;"
+// "}"
+
+// /* Notebook (tabbed interface) styling */
+// "notebook {"
+// "    background-color: @bg_color;"
+// "    color: @fg_color;"
+// "}"
+
+// "notebook header {"
+// "    background-color: @bg_color;"
+// "}"
+
+// "notebook tab {"
+// "    background-color: #3d3d3d;"
+// "    color: @fg_color;"
+// "    padding: 8px;"
+// "    border-radius: 4px 4px 0 0;"
+// "    border: 1px solid #555;"
+// "    margin: 1px;"
+// "}"
+
+// "notebook tab:checked {"
+// "    background-color: #4d4d4d;"
+// "    font-weight: bold;"
+// "}"
+
+// /* Frame styling */
+// "frame {"
+// "    background-color: #3d3d3d;"
+// "    border-radius: 5px;"
+// "    border: 1px solid #555;"
+// "    margin: 10px;"
+// "    padding: 10px;"
+// "}"
+
+// "frame > label {"
+// "    font-weight: bold;"
+// "    color: @fg_color;"
+// "}"
+
+// /* Buttons styling */
+// "button {"
+// "    background-color: #0078d7;"
+// "    color: white;"
+// "    border-radius: 4px;"
+// "    padding: 6px 12px;"
+// "    border: none;"
+// "}"
+
+// "button:hover {"
+// "    background-color: #1a88e1;"
+// "}"
+
+// "button:active {"
+// "    background-color: #005fa3;"
+// "}"
+
+// "button:disabled {"
+// "    background-color: #4d4d4d;"
+// "    color: #aaa;"
+// "}"
+
+// /* ComboBox styling */
+// "combobox {"
+// "    background-color: #4d4d4d;"
+// "    color: @fg_color;"
+// "    border: 1px solid #555;"
+// "    border-radius: 3px;"
+// "}"
+
+// "combobox button {"
+// "    background-color: #4d4d4d;"
+// "    color: @fg_color;"
+// "}"
+
+// "combobox entry {"
+// "    background-color: #4d4d4d;"
+// "    color: @fg_color;"
+// "}"
+
+// "combobox menu {"
+// "    background-color: #3d3d3d;"
+// "}"
+
+// "combobox menuitem {"
+// "    background-color: #3d3d3d;"
+// "    color: @fg_color;"
+// "}"
+
+// "combobox menuitem:hover {"
+// "    background-color: @selected_bg_color;"
+// "    color: @selected_fg_color;"
+// "}"
+
+// "combobox box {"
+// "    background-color: #4d4d4d;"
+// "}"
+
+// "popover {"
+// "    background-color: #3d3d3d;"
+// "    color: @fg_color;"
+// "}"
+
+// /* TreeView styling (for lists) */
+// "treeview {"
+// "    background-color: #3d3d3d;"
+// "    color: @fg_color;"
+// "    border: 1px solid #555;"
+// "}"
+
+// "treeview:selected {"
+// "    background-color: @selected_bg_color;"
+// "    color: @selected_fg_color;"
+// "}"
+
+// "treeview header {"
+// "    background-color: #4d4d4d;"
+// "    color: @fg_color;"
+// "}"
+
+// "treeview header button {"
+// "    background-color: #4d4d4d;"
+// "    color: @fg_color;"
+// "    border: 1px solid #555;"
+// "}"
+
+// /* ScrolledWindow styling */
+// "scrolledwindow {"
+// "    background-color: @bg_color;"
+// "    border: 1px solid #555;"
+// "}"
+
+// /* TextView styling (for logs) */
+// "textview {"
+// "    background-color: #3d3d3d;"
+// "    color: @fg_color;"
+// "}"
+
+// "textview text {"
+// "    background-color: #3d3d3d;"
+// "    color: @fg_color;"
+// "}"
+
+// /* Entry styling */
+// "entry {"
+// "    background-color: #4d4d4d;"
+// "    color: @fg_color;"
+// "    border: 1px solid #555;"
+// "    border-radius: 3px;"
+// "    padding: 5px;"
+// "}"
+
+// /* SpinButton styling */
+// "spinbutton {"
+// "    background-color: #4d4d4d;"
+// "    color: @fg_color;"
+// "}"
+
+// "spinbutton entry {"
+// "    background-color: #4d4d4d;"
+// "    color: @fg_color;"
+// "}"
+
+// "spinbutton button {"
+// "    background-color: #4d4d4d;"
+// "    color: @fg_color;"
+// "}"
+
+// /* Custom classes */
+// ".running {"
+// "    background-color: #3c9f40;"
+// "    color: white;"
+// "    padding: 4px;"
+// "    border-radius: 3px;"
+// "}"
+
+// ".ready {"
+// "    background-color: #0078d7;"
+// "    color: white;"
+// "    padding: 4px;"
+// "    border-radius: 3px;"
+// "}"
+
+// ".blocked {"
+// "    background-color: #d83b01;"
+// "    color: white;"
+// "    padding: 4px;"
+// "    border-radius: 3px;"
+// "}"
+
+// ".memory-cell {"
+// "    border: 1px solid #555;"
+// "    padding: 4px;"
+// "    font-family: monospace;"
+// "    background-color: #3d3d3d;"
+// "    color: @fg_color;"
+// "}"
+
+// ".memory-cell-used {"
+// "    background-color: #264f78;"
+// "}";
+//new css end
+
+
 int main(int argc, char *argv[]) {
     // Initialize GTK
     gtk_init(&argc, &argv);
@@ -1592,6 +1819,20 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock)
 
 	if (strcmp(tokens[0], "assign") == 0) {
 		char* target = tokens[1];
+
+        bool flag = false;        
+        for( int i =6; i<= 8; i++){
+            if(strcmp(target, mainMemory.memoryArray[processControlBlock->memory_start + i].name) ==0){
+                break;
+            }
+
+            if(strlen(mainMemory.memoryArray[processControlBlock->memory_start+i].name)==0){
+                strcpy(mainMemory.memoryArray[processControlBlock->memory_start+i].name, target);
+            }
+
+        }
+
+
 		char* value = tokens[2];
 
 		value[strcspn(value, "\r\n")] = '\0';
@@ -1625,23 +1866,24 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock)
 					filepath, mainMemory.memoryArray[processControlBlock->memory_start + 8].data);
 			}
 
+
 			char* fileString = readFile(filepath);
 
 			// printf("Read File String: %s", fileString);
 
 			// printf("Found file path\n");
 
-			if (strcmp(target, "a") == 0) {
+			if (strcmp(target, mainMemory.memoryArray[processControlBlock->memory_start + 6].name) == 0) {
 				// mainMemory.memoryArray[processControlBlock->memory_start + 6].data =
 				// fileString;
 				strcpy(
 					mainMemory.memoryArray[processControlBlock->memory_start + 6].data, fileString);
-			} else if (strcmp(target, "b") == 0) {
+			} else if (strcmp(target, mainMemory.memoryArray[processControlBlock->memory_start + 7].name) == 0) {
 				// mainMemory.memoryArray[processControlBlock->memory_start + 7].data =
 				// fileString;
 				strcpy(
 					mainMemory.memoryArray[processControlBlock->memory_start + 7].data, fileString);
-			} else {
+			} else if (strcmp(target, mainMemory.memoryArray[processControlBlock->memory_start + 8].name) == 0) {
 				// mainMemory.memoryArray[processControlBlock->memory_start + 8].data =
 				// fileString;
 				strcpy(
@@ -1659,18 +1901,18 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock)
             char* user_input = get_user_input_from_dialog(processControlBlock->id);
             strcpy(userInputValue, user_input);
 
-			if (strcmp(target, "a") == 0) {
+			if (strcmp(target, mainMemory.memoryArray[processControlBlock->memory_start + 6].name) == 0) {
 				// mainMemory.memoryArray[processControlBlock->memory_start + 6].data =
 				// userInputValue;
 				strcpy(mainMemory.memoryArray[processControlBlock->memory_start + 6].data,
 					userInputValue);
 
-			} else if (strcmp(target, "b") == 0) {
+			} else if (strcmp(target, mainMemory.memoryArray[processControlBlock->memory_start + 7].name) == 0) {
 				// mainMemory.memoryArray[processControlBlock->memory_start + 7].data =
 				// userInputValue;
 				strcpy(mainMemory.memoryArray[processControlBlock->memory_start + 7].data,
 					userInputValue);
-			} else {
+			} else if (strcmp(target, mainMemory.memoryArray[processControlBlock->memory_start + 8].name) == 0){
 				// mainMemory.memoryArray[processControlBlock->memory_start + 8].data =
 				// userInputValue;
 				strcpy(mainMemory.memoryArray[processControlBlock->memory_start + 8].data,
@@ -1710,16 +1952,16 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock)
 		char* value = tokens[1];
 		char data[256];
 
-		if (strcmp(value, "a") == 0) {
+		if (strcmp(value, mainMemory.memoryArray[processControlBlock->memory_start + 6].name) == 0) {
 			// mainMemory.memoryArray[processControlBlock->memory_start + 6].data =
 			// userInputValue;
 			strcpy(data, mainMemory.memoryArray[processControlBlock->memory_start + 6].data);
 
-		} else if (strcmp(value, "b\r\n") == 0) {
+		} else if (strcmp(value, mainMemory.memoryArray[processControlBlock->memory_start + 7].name) == 0) {
 			// mainMemory.memoryArray[processControlBlock->memory_start + 7].data =
 			// userInputValue;
 			strcpy(data, mainMemory.memoryArray[processControlBlock->memory_start + 7].data);
-		} else {
+		} else if (strcmp(value, mainMemory.memoryArray[processControlBlock->memory_start + 8].name) == 0) {
 			// mainMemory.memoryArray[processControlBlock->memory_start + 8].data =
 			// userInputValue;
 			strcpy(data, mainMemory.memoryArray[processControlBlock->memory_start + 8].data);
@@ -1963,12 +2205,9 @@ ProcessControlBlock loadProcess(char* filepath)
 	sprintf(buffer, "%s", processToString(pcb.state));
 	strcpy(mainMemory.memoryArray[pcb.memory_start + 5].data, buffer);
 
-	strcpy(mainMemory.memoryArray[pcb.memory_start + 6].name, "a");
-	strcpy(mainMemory.memoryArray[pcb.memory_start + 7].name, "b");
-	strcpy(mainMemory.memoryArray[pcb.memory_start + 8].name, "c");
-	// mainMemory.memoryArray[pcb.memory_start + 6].name = "a";
-	// mainMemory.memoryArray[pcb.memory_start + 7].name = "b";
-	// mainMemory.memoryArray[pcb.memory_start + 8].name = "c";
+	strcpy(mainMemory.memoryArray[pcb.memory_start + 6].name, "");
+	strcpy(mainMemory.memoryArray[pcb.memory_start + 7].name, "");
+	strcpy(mainMemory.memoryArray[pcb.memory_start + 8].name, "");
 
 	FILE* code_file = fopen(filepath, "r");
 
