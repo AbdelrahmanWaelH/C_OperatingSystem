@@ -2121,7 +2121,20 @@ void terminateProcess(ProcessControlBlock *process) {
 			break; // Important: exit after removing
 		}
 	}
-
+	// during termination remove that process if it is locking any resource
+	// TODO may be removed but is essential for now .
+	if (userInputBlockingProcess != NULL && userInputBlockingProcess->id == process->id) {
+		userInputBlockingProcess = NULL;
+		safe_sem_post(&userInputSemaphore);
+	}
+	if (userOutputBlockingProcess != NULL && userOutputBlockingProcess->id == process->id) {
+		userOutputBlockingProcess = NULL;
+		safe_sem_post(&userOutputSemaphore);
+	}
+	if (fileBlockingProcess != NULL && fileBlockingProcess->id == process->id) {
+		safe_sem_post(&fileSemaphore);
+		fileBlockingProcess = NULL;
+	}
 	update_dashboard();
 }
 
