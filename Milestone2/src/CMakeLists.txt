@@ -9,10 +9,6 @@ add_executable(Milestone2OS
     main.c
     Queue.c
     FileReader.c
-    # Scheduler.c
-    SchedulerTest.c
-    Task.c
-    Semaphores.c
 )
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTK3 REQUIRED gtk+-3.0)

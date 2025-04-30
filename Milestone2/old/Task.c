@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "../include/Task.h"
+#include "Task.h"
 
 int task_run(Task *task) {
     task->runtime++;
