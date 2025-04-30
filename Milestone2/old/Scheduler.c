@@ -1,4 +1,4 @@
-#include "../include/Scheduler.h"
+#include "Scheduler.h"
 #include "../include/Semaphores.h"
 
 #include <stdlib.h>

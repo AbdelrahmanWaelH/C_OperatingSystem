@@ -1,4 +1,4 @@
-#include "../include/Semaphores.h"
+#include "Semaphores.h"
 
 sem_t userInputSemaphore;
 sem_t userOutputSemaphore;
