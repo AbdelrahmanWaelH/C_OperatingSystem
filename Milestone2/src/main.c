@@ -58,6 +58,11 @@ typedef struct {
 	MemoryWord memoryArray[60];
 } Memory;
 
+typedef struct {
+	char * filePath;
+	int arrivalTime;
+} WaitingProcess;
+
 extern sem_t userInputSemaphore;
 extern sem_t userOutputSemaphore;
 extern sem_t fileSemaphore;
@@ -88,7 +93,7 @@ void initQueues();
 char* processToString(ProcessState state);
 void displayMemory(Memory* mainMemory);
 char* select_file_dialog(GtkWidget *parent_window);
-
+void checkWaitingQueue();
  // Forward declarations for existing scheduler functions
  extern void executeSingleLinePCB(ProcessControlBlock* processControlBlock);
  extern ProcessControlBlock loadProcess(char* filepath);
@@ -143,6 +148,7 @@ char* select_file_dialog(GtkWidget *parent_window);
  Scheduler *scheduler = NULL;
  GMainLoop *main_loop = NULL;
  guint timeout_id = 0;
+ Queue* loadingQueue;
 
  // List of loaded processes
  ProcessControlBlock *loaded_processes[10];
@@ -1696,7 +1702,7 @@ char* select_file_dialog(GtkWidget *parent_window) {
 static void on_add_process_button_clicked(GtkButton *button, gpointer user_data) {
     // Count how many processes were selected
     int count = 0;
-    char *selected_files[10];
+    char *selected_files[10] = {NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL};
     int arrival_times[10];
 
     for (int i = 0; i < 10; i++) {
@@ -1715,31 +1721,43 @@ static void on_add_process_button_clicked(GtkButton *button, gpointer user_data)
 
     // Load each selected process
     for (int i = 0; i < count; i++) {
-        // Check if we have space for more processes
-        if (num_loaded_processes >= 10) {
-            add_event_message("Cannot load more processes: Maximum limit reached.");
-            free(selected_files[i]);
-            continue;
-        }
+	    // Check if we have space for more processes
+    	if (num_loaded_processes >= 10) {
+    		add_event_message("Cannot load more processes: Maximum limit reached.");
+    		free(selected_files[i]);
+    		continue;
+    	}
+		if (selected_files[i]!=NULL) {
+			if (arrival_times[i] == 0) {
+				// Set arrival time - only if you've added the field to the struct
+				// Load the process
+				ProcessControlBlock pcb = loadProcess(selected_files[i]);
+				pcb.arrivalTime = arrival_times[i];
+				// Store the process
+				loaded_processes[num_loaded_processes] = malloc(sizeof(ProcessControlBlock));
+				memcpy(loaded_processes[num_loaded_processes], &pcb, sizeof(ProcessControlBlock));
+				num_loaded_processes++;
+			}else {
+				if (loadingQueue ==NULL) {
+					loadingQueue = queue_new();
+				}
+				WaitingProcess* p = (WaitingProcess*)malloc(sizeof(WaitingProcess));
+				p->arrivalTime = arrival_times[i];
+				p->filePath = strdup(selected_files[i]);
+				queue_push_tail(loadingQueue, p);
+			}
 
-        // Load the process
-        ProcessControlBlock pcb = loadProcess(selected_files[i]);
-        // Set arrival time - only if you've added the field to the struct
-        pcb.arrivalTime = arrival_times[i];
 
-        // Store the process
-        loaded_processes[num_loaded_processes] = malloc(sizeof(ProcessControlBlock));
-        memcpy(loaded_processes[num_loaded_processes], &pcb, sizeof(ProcessControlBlock));
-        num_loaded_processes++;
+			// Log the event
+			char message[256];
+			sprintf(message, "Process loaded from %s with arrival time %d.",
+					selected_files[i], arrival_times[i]);
+			add_event_message(message);
 
-        // Log the event
-        char message[256];
-        sprintf(message, "Process loaded from %s with arrival time %d.",
-                selected_files[i], arrival_times[i]);
-        add_event_message(message);
+			// Free the file name
+			free(selected_files[i]);
+		}
 
-        // Free the file name
-        free(selected_files[i]);
     }
 
     // Update the displays
@@ -1804,6 +1822,8 @@ static gboolean simulation_step(gpointer user_data) {
             on_stop_button_clicked(NULL, NULL);
             return FALSE; // Stop the timer
         }
+		// TODO -> check wether to adjust the waiting queue at the end of the cycle or at the start
+    	checkWaitingQueue();
     }
 
     // Update all displays
@@ -2175,6 +2195,30 @@ void initMemory()
 	}
 }
 
+void checkWaitingQueue() {
+	if (loadingQueue == NULL || queue_is_empty(loadingQueue)) {
+		return;  // Nothing to do if queue is empty
+	}
+
+	Queue* temp = queue_new();
+	while (!queue_is_empty(loadingQueue)) {
+		WaitingProcess* wp = (WaitingProcess*)queue_pop_head(loadingQueue);
+		if (wp->arrivalTime == cycle_count) {
+			ProcessControlBlock pcb = loadProcess(wp->filePath);
+			loaded_processes[num_loaded_processes] = malloc(sizeof(ProcessControlBlock));
+			memcpy(loaded_processes[num_loaded_processes], &pcb, sizeof(ProcessControlBlock));
+			scheduler_add_task(scheduler, loaded_processes[num_loaded_processes]);
+			num_loaded_processes++;
+			free(wp);
+		} else {
+			queue_push_tail(temp, wp);
+		}
+	}
+
+	queue_free(loadingQueue);
+	loadingQueue = temp;
+}
+
 ProcessControlBlock loadProcess(char* filepath)
 {
 
@@ -2195,7 +2239,7 @@ ProcessControlBlock loadProcess(char* filepath)
 
 	pcb.memory_start = indexOfFree;
 
-	pcb.priority = 1;
+	pcb.priority = 0;
 
 	pcb.program_counter = 0;
 
@@ -2437,7 +2481,7 @@ void scheduler_step(Scheduler* sched) {
                 process->blockedResource = NIL;
                 process->state = READY;
                 process->timeslice_used = 0;
-                queue_push_tail(sched->input_queues[0], process);
+                queue_push_tail(sched->input_queues[process->priority], process);
             } else {
                 queue_push_tail(temp, process);
             }
@@ -2540,6 +2584,7 @@ void scheduler_step(Scheduler* sched) {
                         process = (ProcessControlBlock*)queue_pop_head(sched->input_queues[level]);
                         process->timeslice_used = 0;
                         int next_level = (level < MLFQ_LEVELS - 1) ? level + 1 : level;
+                    	process->priority = next_level;
                         queue_push_tail(sched->input_queues[next_level], process);
                         sched->running_process = NULL; // Process moved to next level
                     }
