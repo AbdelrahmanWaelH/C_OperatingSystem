@@ -9,9 +9,6 @@ add_executable(Milestone2OS
     main.c
     Queue.c
     FileReader.c
-    # Scheduler.c
-        ../old/SchedulerTest.c
-        ../old/Task.c
     Semaphores.c
 )
 find_package(PkgConfig REQUIRED)
