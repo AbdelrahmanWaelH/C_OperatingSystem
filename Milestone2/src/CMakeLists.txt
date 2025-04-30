@@ -10,8 +10,8 @@ add_executable(Milestone2OS
     Queue.c
     FileReader.c
     # Scheduler.c
-    SchedulerTest.c
-    Task.c
+        ../old/SchedulerTest.c
+        ../old/Task.c
     Semaphores.c
 )
 find_package(PkgConfig REQUIRED)

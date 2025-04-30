@@ -1,7 +1,7 @@
 #ifndef SCHEDULER_H
 #define SCHEDULER_H
 
-#include "Queue.h"
+#include "../include/Queue.h"
 #include "Task.h"
 
 #define MLFQ_LEVELS 4
