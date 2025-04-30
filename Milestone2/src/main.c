@@ -114,7 +114,7 @@ char* select_file_dialog(GtkWidget *parent_window);
 
  // Scheduler control widgets
  GtkWidget *algorithm_combo;
- GtkWidget *start_button, *stop_button, *reset_button, *step_button;
+ GtkWidget *start_button, *stop_button, *reset_button, *step_button,*step5_button;
  GtkWidget *quantum_spin;
 
  // Resource management widgets
@@ -178,6 +178,7 @@ char* select_file_dialog(GtkWidget *parent_window);
  static void on_stop_button_clicked(GtkButton *button, gpointer user_data);
  static void on_reset_button_clicked(GtkButton *button, gpointer user_data);
  static void on_step_button_clicked(GtkButton *button, gpointer user_data);
+static void on_step5_clicked(GtkButton *button, gpointer user_data);
  static void on_add_process_button_clicked(GtkButton *button, gpointer user_data);
  static void on_algorithm_changed(GtkComboBox *widget, gpointer user_data);
  static void on_browse_button_clicked(GtkButton *button, gpointer user_data);
@@ -729,6 +730,10 @@ int main(int argc, char *argv[]) {
      step_button = gtk_button_new_with_label("Step");
      gtk_box_pack_start(GTK_BOX(box), step_button, FALSE, FALSE, 0);
      g_signal_connect(step_button, "clicked", G_CALLBACK(on_step_button_clicked), NULL);
+
+	step5_button = gtk_button_new_with_label("Execute 5 Instructions");
+	gtk_box_pack_start(GTK_BOX(box), step5_button, FALSE, FALSE, 0);
+	g_signal_connect(step5_button, "clicked", G_CALLBACK(on_step5_clicked), NULL);
  }
 
  static void setup_resource_management(GtkWidget *container) {
@@ -1518,6 +1523,7 @@ static void on_start_button_clicked(GtkButton *button, gpointer user_data) {
     gtk_widget_set_sensitive(start_button, FALSE);
     gtk_widget_set_sensitive(stop_button, TRUE);
     gtk_widget_set_sensitive(step_button, FALSE);
+	gtk_widget_set_sensitive(step5_button, FALSE);
     gtk_widget_set_sensitive(add_process_button, FALSE);
     gtk_widget_set_sensitive(algorithm_combo, FALSE);
     gtk_widget_set_sensitive(quantum_spin, FALSE);
@@ -1539,7 +1545,7 @@ static void on_stop_button_clicked(GtkButton *button, gpointer user_data) {
     // Update button states
     gtk_widget_set_sensitive(start_button, TRUE);
     gtk_widget_set_sensitive(stop_button, FALSE);
-    gtk_widget_set_sensitive(step_button, TRUE);
+    gtk_widget_set_sensitive(step5_button, TRUE);
     gtk_widget_set_sensitive(add_process_button, TRUE);
     gtk_widget_set_sensitive(algorithm_combo, TRUE);
 
@@ -1653,6 +1659,12 @@ static void on_step_button_clicked(GtkButton *button, gpointer user_data) {
 
     // Execute one step
     simulation_step(NULL);
+}
+
+static void on_step5_clicked(GtkButton *button, gpointer user_data) {
+	for (int i=0;i<5;i++) {
+		on_step_button_clicked(button,user_data);
+	}
 }
 // Function to create a file chooser dialog and return the selected filename
 char* select_file_dialog(GtkWidget *parent_window) {
