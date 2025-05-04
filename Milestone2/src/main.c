@@ -72,6 +72,7 @@ ProcessControlBlock* userOutputBlockingProcess;
 ProcessControlBlock* fileBlockingProcess;
 
 int processIdCounter = 0;
+char* lastLine;
 
 void removeNewline(char* buffer)
 {
@@ -569,7 +570,7 @@ int main(int argc, char *argv[]) {
      gtk_grid_attach(GTK_GRID(overview_grid), total_processes_label, 1, 0, 1, 1);
 
      // Current Cycle
-     GtkWidget *current_cycle_title = gtk_label_new("Current Cycle:");
+     GtkWidget *current_cycle_title = gtk_label_new("Upcoming Cycle:");
      gtk_grid_attach(GTK_GRID(overview_grid), current_cycle_title, 0, 1, 1, 1);
 
      current_cycle_label = gtk_label_new("0");
@@ -1160,6 +1161,8 @@ static void update_queues() {
         	char* line = mainMemory.memoryArray[currentLine].data;
         	if (line != NULL) {
         		snprintf(instruction, sizeof(instruction), "%s", line);
+        	}else {
+        		snprintf(instruction, sizeof(instruction), "%s", lastLine);
         	}
         }
 
@@ -1194,6 +1197,8 @@ static void update_queues() {
             	char* line = mainMemory.memoryArray[currentLine].data;
             	if (line != NULL) {
             		snprintf(instruction, sizeof(instruction), "%s", line);
+            	}else {
+            		snprintf(instruction, sizeof(instruction), "%s", lastLine);
             	}
             }
 
@@ -1417,7 +1422,7 @@ static void add_execution_log(const char *message) {
 
     // Add timestamp
     char timestamp[20];
-    sprintf(timestamp, "[Cycle %d] ", cycle_count);
+    sprintf(timestamp, "[Cycle %d] ", cycle_count-1);
     gtk_text_buffer_insert(execution_log_buffer, &iter, timestamp, -1);
 
     // Add message and new line
@@ -1578,20 +1583,50 @@ static void on_reset_button_clicked(GtkButton *button, gpointer user_data) {
         }
     }
 	// reset number of loaded processes
-    num_loaded_processes = 0;
+	num_loaded_processes = 0;
 
-    // Reset cycle count
-    cycle_count = 0;
+	// Reset cycle count
+	cycle_count = 0;
 
 	// reset the processIdCounter
 	processIdCounter = 0;
 
-	// clear the scheduler
-	scheduler = NULL;
+	// Reset loading queue
+	if (loadingQueue != NULL) {
+		queue_free(loadingQueue);
+		loadingQueue = queue_new();
+	}
 
-    // Reinitialize memory and semaphores
-    initMemory();
-    initSemaphores();
+	// clear the scheduler
+	if (scheduler != NULL) {
+		// Add any needed cleanup for scheduler
+		scheduler = NULL;
+	}
+
+	// Reset blocked queue - need to empty it
+	while (!queue_is_empty(&blockedQueue)) {
+		queue_free(&blockedQueue);
+	}
+
+	// Reset semaphores
+	sem_destroy(&userInputSemaphore);
+	sem_destroy(&userOutputSemaphore);
+	sem_destroy(&fileSemaphore);
+	sem_init(&userInputSemaphore, 0, 1);
+	sem_init(&userOutputSemaphore, 0, 1);
+	sem_init(&fileSemaphore, 0, 1);
+
+	// reset the semaphore blocked processes
+	userInputBlockingProcess = NULL;
+	userOutputBlockingProcess = NULL;
+	fileBlockingProcess = NULL;
+
+	// Reset last line
+	if (lastLine != NULL) {
+		free(lastLine);
+		lastLine = NULL;
+	}
+
 	// reset the sempahore locked processes
 	fileBlockingProcess = NULL;
 	userOutputBlockingProcess = NULL;
@@ -1778,6 +1813,9 @@ static gboolean simulation_step(gpointer user_data) {
 
     // Step the scheduler
     if (scheduler != NULL) {
+    	// Step the scheduler
+    	scheduler_step(scheduler);
+
         char log_message[256];
 
         // Check if we have a running process
@@ -1785,28 +1823,22 @@ static gboolean simulation_step(gpointer user_data) {
             ProcessControlBlock *running = scheduler->running_process;
 
         	char instruction[256] = "Unknown";
-        	if (running->state != TERMINATED) {
-        		// Get the instruction
-        		int memoryStart = running->memory_start;
-        		int currentLine = memoryStart + running->program_counter + CODE_SEGMENT_OFFSET;
-        		char* line = mainMemory.memoryArray[currentLine].data;
-        		if (line != NULL) {
-        			snprintf(instruction, sizeof(instruction), "%s", line);
-        		}
-				}
+        	// Get the instruction
+        	int memoryStart = running->memory_start;
+        	int currentLine = memoryStart + running->program_counter + CODE_SEGMENT_OFFSET - 1;
+        	char* line = mainMemory.memoryArray[currentLine].data;
+			if (line != NULL && line[0] != '\0') {
+        		snprintf(instruction, sizeof(instruction), "%s", line);
+        	}else {
+        		snprintf(instruction, sizeof(instruction), "%s", lastLine);
+        	}
 
-            // Log the current instruction - access it from memory
-            int currentLine = running->memory_start + running->program_counter + CODE_SEGMENT_OFFSET;
-
-            if (running->program_counter >= 0 &&
-                currentLine <= running->memory_end) {
+            if (instruction != NULL && strcmp("Unknown",instruction) != 0 ) {
                 sprintf(log_message, "Process %d executing: %s",running->id, instruction);
                 add_execution_log(log_message);
             }
         }
 
-        // Step the scheduler
-        scheduler_step(scheduler);
 
         // Check for finished processes
         bool all_terminated = true;
@@ -1853,6 +1885,7 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock)
 	// printf("%d\n", processControlBlock->id);
 
 	char* line = mainMemory.memoryArray[currentLine].data;
+	lastLine = strdup(line);
 	char** tokens = lineParser(line);
 
 	// printf("Currently at PC: %d\n", processControlBlock->program_counter);
@@ -2450,8 +2483,6 @@ void terminateProcess(ProcessControlBlock *process) {
 
 void scheduler_step(Scheduler* sched) {
     int semValue = 0;
-	cycle_count;
-	// TODO -> check wether to adjust the waiting queue at the end of the cycle or at the start
 	checkWaitingQueue();
 
 	// time_in_queue for each in all processes in queue
@@ -2525,6 +2556,7 @@ void scheduler_step(Scheduler* sched) {
         		&& sched->running_process->timeslice_used!=0
         		&& sched->running_process->timeslice_used < sched->mlfq_quantum[sched->running_process->priority]) {
         		ProcessControlBlock* process = sched->running_process;
+        		sched->running_process = process;
         		int level = process->priority;
         		isDone = true;
         		executeSingleLinePCB(process);
@@ -2534,7 +2566,7 @@ void scheduler_step(Scheduler* sched) {
         			queue_push_tail(&blockedQueue, process);
         		}
 
-        		if (process->memory_start + process->program_counter + CODE_SEGMENT_OFFSET >= process->memory_end) {
+        		if (process->memory_start + process->program_counter + CODE_SEGMENT_OFFSET > process->memory_end) {
         			process = (ProcessControlBlock*)queue_pop_head(sched->input_queues[level]);
         			process->timeslice_used = 0;
         			queue_push_tail(sched->output_queue, process);
@@ -2565,7 +2597,7 @@ void scheduler_step(Scheduler* sched) {
         					break;
         				}
 
-        				if (process->memory_start + process->program_counter + CODE_SEGMENT_OFFSET >= process->memory_end) {
+        				if (process->memory_start + process->program_counter + CODE_SEGMENT_OFFSET > process->memory_end) {
         					process = (ProcessControlBlock*)queue_pop_head(sched->input_queues[level]);
         					process->timeslice_used = 0;
         					queue_push_tail(sched->output_queue, process);
