@@ -1,9 +1,9 @@
- #include <gtk/gtk.h>
- #include <stdlib.h>
- #include <stdio.h>
- #include <string.h>
- #include <stdbool.h>
- #include "../include/FileReader.h"
+#include <gtk/gtk.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdbool.h>
+#include "../include/FileReader.h"
 #include "../include/Queue.h"
 #include <semaphore.h>
 #include <stdarg.h>
@@ -1156,10 +1156,11 @@ static void update_queues() {
         char instruction[256] = "Unknown";
         if (process->program_counter >= 0 &&
             process->memory_start + process->program_counter + CODE_SEGMENT_OFFSET < process->memory_end) {
-            // Get the instruction from memory or program
-            // This depends on how you store instructions in your implementation
-            // Either fetch from memory or from process->instructions if available
-            strcpy(instruction, "Current instruction"); // Replace with actual instruction
+        	int currentLine = process->memory_start + (process->program_counter != 0 ? process->program_counter - 1 : process->program_counter) + CODE_SEGMENT_OFFSET;
+        	char* line = mainMemory.memoryArray[currentLine].data;
+        	if (line != NULL) {
+        		snprintf(instruction, sizeof(instruction), "%s", line);
+        	}
         }
 
         gtk_list_store_set(running_process_store, &iter,
@@ -1822,8 +1823,6 @@ static gboolean simulation_step(gpointer user_data) {
             on_stop_button_clicked(NULL, NULL);
             return FALSE; // Stop the timer
         }
-		// TODO -> check wether to adjust the waiting queue at the end of the cycle or at the start
-    	checkWaitingQueue();
     }
 
     // Update all displays
@@ -2067,7 +2066,6 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock)
 			if (semValue == 0) {
 				processControlBlock->state = BLOCKED;
 				processControlBlock->blockedResource = FILE_RW;
-				return;
 			} else {
 				fileBlockingProcess = processControlBlock;
 				safe_sem_wait(&fileSemaphore);
@@ -2078,7 +2076,6 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock)
 			if (semValue == 0) {
 				processControlBlock->state = BLOCKED;
 				processControlBlock->blockedResource = USER_INPUT;
-				return;
 			} else {
 				userInputBlockingProcess = processControlBlock;
 				safe_sem_wait(&userInputSemaphore);
@@ -2088,7 +2085,6 @@ void executeSingleLinePCB(ProcessControlBlock* processControlBlock)
 			if (semValue == 0) {
 				processControlBlock->state = BLOCKED;
 				processControlBlock->blockedResource = USER_OUTPUT;
-				return;
 			} else {
 				userOutputBlockingProcess = processControlBlock;
 				safe_sem_wait(&userOutputSemaphore);
@@ -2203,7 +2199,7 @@ void checkWaitingQueue() {
 	Queue* temp = queue_new();
 	while (!queue_is_empty(loadingQueue)) {
 		WaitingProcess* wp = (WaitingProcess*)queue_pop_head(loadingQueue);
-		if (wp->arrivalTime == cycle_count) {
+		if (wp->arrivalTime == cycle_count-1) {
 			ProcessControlBlock pcb = loadProcess(wp->filePath);
 			loaded_processes[num_loaded_processes] = malloc(sizeof(ProcessControlBlock));
 			memcpy(loaded_processes[num_loaded_processes], &pcb, sizeof(ProcessControlBlock));
@@ -2455,44 +2451,10 @@ void terminateProcess(ProcessControlBlock *process) {
 
 void scheduler_step(Scheduler* sched) {
     int semValue = 0;
+	cycle_count;
+	// TODO -> check wether to adjust the waiting queue at the end of the cycle or at the start
+	checkWaitingQueue();
 
-    // Check blocked processes first
-    if (!queue_is_empty(&blockedQueue) && sched->type != SCHED_FCFS) {
-        Queue* temp = queue_new();
-
-        while (!queue_is_empty(&blockedQueue)) {
-            ProcessControlBlock* process = (ProcessControlBlock*)queue_pop_head(&blockedQueue);
-
-            switch (process->blockedResource) {
-                case FILE_RW:
-                    sem_getvalue(&fileSemaphore, &semValue);
-                    break;
-                case USER_INPUT:
-                    sem_getvalue(&userInputSemaphore, &semValue);
-                    break;
-                case USER_OUTPUT:
-                    sem_getvalue(&userOutputSemaphore, &semValue);
-                    break;
-                default:
-                    break;
-            }
-
-            if (semValue != 0) {
-                process->blockedResource = NIL;
-                process->state = READY;
-                process->timeslice_used = 0;
-                queue_push_tail(sched->input_queues[process->priority], process);
-            } else {
-                queue_push_tail(temp, process);
-            }
-        }
-
-        blockedQueue = *temp;
-        free(temp); // Free the temporary queue structure
-    }
-
-    // Set running process to NULL initially
-    sched->running_process = NULL;
 	// time_in_queue for each in all processes in queue
 	for (int i = 0; i < MLFQ_LEVELS; i++) {
 		Queue * currentQ = sched->input_queues[i];
@@ -2517,7 +2479,6 @@ void scheduler_step(Scheduler* sched) {
                 sched->running_process = process; // Update running process
 
                 executeSingleLinePCB(process);
-
                 if (process->memory_start + process->program_counter + CODE_SEGMENT_OFFSET >= process->memory_end) {
                     queue_pop_head(sched->input_queues[0]);
                     queue_push_tail(sched->output_queue, process);
@@ -2540,7 +2501,6 @@ void scheduler_step(Scheduler* sched) {
                     queue_pop_head(sched->input_queues[0]);
                     queue_push_tail(&blockedQueue, process);
                     sched->running_process = NULL; // Process blocked
-                    return;
                 }
 
                 if (process->memory_start + process->program_counter + CODE_SEGMENT_OFFSET >= process->memory_end) {
@@ -2559,41 +2519,123 @@ void scheduler_step(Scheduler* sched) {
         }
 
         case SCHED_MLFQ: {
-            for (int level = 0; level < MLFQ_LEVELS; level++) {
-                if (!queue_is_empty(sched->input_queues[level])) {
-                    ProcessControlBlock* process = (ProcessControlBlock*)queue_peek_head(sched->input_queues[level]);
-                    sched->running_process = process; // Update running process
+        	bool isDone = false;
+        	if (sched->running_process != NULL
+        		&& sched->running_process->state!=TERMINATED
+        		&& sched->running_process->timeslice_used!=0
+        		&& sched->running_process->timeslice_used < sched->mlfq_quantum[sched->running_process->priority]) {
+        		ProcessControlBlock* process = sched->running_process;
+        		int level = process->priority;
+        		isDone = true;
+        		executeSingleLinePCB(process);
+        		process->timeslice_used++;
+        		if (process->state == BLOCKED) {
+        			queue_pop_head(sched->input_queues[level]);
+        			queue_push_tail(&blockedQueue, process);
+        		}
 
-                    executeSingleLinePCB(process);
-                    process->timeslice_used++;
+        		if (process->memory_start + process->program_counter + CODE_SEGMENT_OFFSET >= process->memory_end) {
+        			process = (ProcessControlBlock*)queue_pop_head(sched->input_queues[level]);
+        			process->timeslice_used = 0;
+        			queue_push_tail(sched->output_queue, process);
+        			// Process completed
+        			terminateProcess(process);
+        		} else if (process->timeslice_used >= sched->mlfq_quantum[level]) {
+        			process = (ProcessControlBlock*)queue_pop_head(sched->input_queues[level]);
+        			process->timeslice_used = 0;
+        			int next_level = (level < MLFQ_LEVELS - 1) ? level + 1 : level;
+        			process->priority = next_level;
+        			queue_push_tail(sched->input_queues[next_level], process);
+        			// Process moved to next level
+        		}
+        	}
+        	if (!isDone) {
+        		for (int level = 0; level < MLFQ_LEVELS; level++) {
+        			if (!queue_is_empty(sched->input_queues[level])) {
+        				ProcessControlBlock* process = (ProcessControlBlock*)queue_peek_head(sched->input_queues[level]);
+        				sched->running_process = process; // Update running process
 
-                    if (process->state == BLOCKED) {
-                        queue_pop_head(sched->input_queues[level]);
-                        queue_push_tail(&blockedQueue, process);
-                        sched->running_process = NULL; // Process blocked
-                        return;
-                    }
+        				executeSingleLinePCB(process);
+        				process->timeslice_used++;
 
-                    if (process->memory_start + process->program_counter + CODE_SEGMENT_OFFSET >= process->memory_end) {
-                        process = (ProcessControlBlock*)queue_pop_head(sched->input_queues[level]);
-                        process->timeslice_used = 0;
-                        queue_push_tail(sched->output_queue, process);
-                        sched->running_process = NULL; // Process completed
-                    	terminateProcess(process);
-                    } else if (process->timeslice_used >= sched->mlfq_quantum[level]) {
-                        process = (ProcessControlBlock*)queue_pop_head(sched->input_queues[level]);
-                        process->timeslice_used = 0;
-                        int next_level = (level < MLFQ_LEVELS - 1) ? level + 1 : level;
-                    	process->priority = next_level;
-                        queue_push_tail(sched->input_queues[next_level], process);
-                        sched->running_process = NULL; // Process moved to next level
-                    }
-                    break;
-                }
-            }
+        				if (process->state == BLOCKED) {
+        					queue_pop_head(sched->input_queues[level]);
+        					queue_push_tail(&blockedQueue, process);
+        					// Process blocked
+        					break;
+        				}
+
+        				if (process->memory_start + process->program_counter + CODE_SEGMENT_OFFSET >= process->memory_end) {
+        					process = (ProcessControlBlock*)queue_pop_head(sched->input_queues[level]);
+        					process->timeslice_used = 0;
+        					queue_push_tail(sched->output_queue, process);
+        					// Process completed
+        					terminateProcess(process);
+        				} else if (process->timeslice_used >= sched->mlfq_quantum[level]) {
+        					process = (ProcessControlBlock*)queue_pop_head(sched->input_queues[level]);
+        					process->timeslice_used = 0;
+        					int next_level = (level < MLFQ_LEVELS - 1) ? level + 1 : level;
+        					process->priority = next_level;
+        					queue_push_tail(sched->input_queues[next_level], process);
+        					// Process moved to next level
+        				}
+        				break;
+        			}
+        		}
+        	}
             break;
         }
     }
+	// Check blocked processes first
+	if (!queue_is_empty(&blockedQueue) && sched->type != SCHED_FCFS) {
+		Queue* temp = queue_new();
+
+		while (!queue_is_empty(&blockedQueue)) {
+			ProcessControlBlock* process = (ProcessControlBlock*)queue_pop_head(&blockedQueue);
+
+			switch (process->blockedResource) {
+				case FILE_RW:
+					sem_getvalue(&fileSemaphore, &semValue);
+					break;
+				case USER_INPUT:
+					sem_getvalue(&userInputSemaphore, &semValue);
+					break;
+				case USER_OUTPUT:
+					sem_getvalue(&userOutputSemaphore, &semValue);
+					break;
+				default:
+					break;
+			}
+
+			if (semValue != 0) {
+				switch (process->blockedResource) {
+					case FILE_RW:
+						safe_sem_wait(&fileSemaphore);
+						break;
+					case USER_INPUT:
+						safe_sem_wait(&userInputSemaphore);
+						break;
+					case USER_OUTPUT:
+						safe_sem_wait(&userOutputSemaphore);
+						break;
+					default:
+						break;
+				}
+				process->blockedResource = NIL;
+				process->state = READY;
+				int level = process->priority;
+				int offset = (process->timeslice_used >= sched->mlfq_quantum[level]) && (level < MLFQ_LEVELS - 1) ? 1 : 0;
+				if (offset == 1)
+					process->timeslice_used = 0;
+				queue_push_tail(sched->input_queues[level+offset], process);
+			} else {
+				queue_push_tail(temp, process);
+			}
+		}
+
+		blockedQueue = *temp;
+		free(temp); // Free the temporary queue structure
+	}
 
     // Update the GUI after each step
     update_queues();
