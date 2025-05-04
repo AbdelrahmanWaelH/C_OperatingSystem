@@ -1155,7 +1155,7 @@ static void update_queues() {
         // Get current instruction
         char instruction[256] = "Unknown";
         if (process->program_counter >= 0 &&
-            process->memory_start + process->program_counter + CODE_SEGMENT_OFFSET < process->memory_end) {
+            process->memory_start + process->program_counter + CODE_SEGMENT_OFFSET <= process->memory_end) {
         	int currentLine = process->memory_start + (process->program_counter != 0 ? process->program_counter - 1 : process->program_counter) + CODE_SEGMENT_OFFSET;
         	char* line = mainMemory.memoryArray[currentLine].data;
         	if (line != NULL) {
@@ -1187,7 +1187,7 @@ static void update_queues() {
             // Get current instruction
             char instruction[256] = "Unknown";
             if (process->program_counter >= 0 &&
-                process->memory_start + process->program_counter + CODE_SEGMENT_OFFSET < process->memory_end) {
+                process->memory_start + process->program_counter + CODE_SEGMENT_OFFSET <= process->memory_end) {
                 // Get the instruction
             	int memoryStart = process->memory_start;
             	int currentLine = memoryStart + process->program_counter + CODE_SEGMENT_OFFSET;
@@ -1596,7 +1596,6 @@ static void on_reset_button_clicked(GtkButton *button, gpointer user_data) {
 	fileBlockingProcess = NULL;
 	userOutputBlockingProcess = NULL;
 	userInputBlockingProcess = NULL;
-
     // Clear all displays
     gtk_list_store_clear(process_list_store);
     gtk_list_store_clear(ready_queue_store);
@@ -2522,6 +2521,7 @@ void scheduler_step(Scheduler* sched) {
         	bool isDone = false;
         	if (sched->running_process != NULL
         		&& sched->running_process->state!=TERMINATED
+        		&& sched->running_process->state!=BLOCKED
         		&& sched->running_process->timeslice_used!=0
         		&& sched->running_process->timeslice_used < sched->mlfq_quantum[sched->running_process->priority]) {
         		ProcessControlBlock* process = sched->running_process;
@@ -2609,15 +2609,21 @@ void scheduler_step(Scheduler* sched) {
 
 			if (semValue != 0) {
 				switch (process->blockedResource) {
-					case FILE_RW:
+					case FILE_RW: {
 						safe_sem_wait(&fileSemaphore);
+						fileBlockingProcess  = process;
 						break;
-					case USER_INPUT:
+					}
+					case USER_INPUT: {
 						safe_sem_wait(&userInputSemaphore);
+						userInputBlockingProcess = process;
 						break;
-					case USER_OUTPUT:
+					}
+					case USER_OUTPUT: {
 						safe_sem_wait(&userOutputSemaphore);
+						userOutputBlockingProcess = process;
 						break;
+					}
 					default:
 						break;
 				}
