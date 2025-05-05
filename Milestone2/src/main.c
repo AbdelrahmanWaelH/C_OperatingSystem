@@ -1489,10 +1489,10 @@ static void on_start_button_clicked(GtkButton *button, gpointer user_data) {
     if (simulation_running) return;
 
     // Check if we have processes loaded
-    if (num_loaded_processes == 0) {
-        add_event_message("Cannot start simulation: No processes loaded.");
-        return;
-    }
+    // if (num_loaded_processes == 0) {
+    //     add_event_message("Cannot start simulation: No processes loaded.");
+    //     return;
+    // }
 
     // Determine scheduler type
     SchedulerType type;
@@ -1655,10 +1655,12 @@ static void on_step_button_clicked(GtkButton *button, gpointer user_data) {
     if (simulation_running) return;
 
     // Check if we have processes loaded
-    if (num_loaded_processes == 0) {
-        add_event_message("Cannot step simulation: No processes loaded.");
-        return;
-    }
+    // if (num_loaded_processes == 0) {
+    //     add_event_message("Cannot step simulation: No processes loaded.");
+    //     return;
+    // }
+
+
 
     // Create scheduler if not exists
     if (scheduler == NULL) {
@@ -2662,7 +2664,7 @@ void scheduler_step(Scheduler* sched) {
 				process->blockedResource = NIL;
 				process->state = READY;
 				int level = process->priority;
-				int offset = (process->timeslice_used >= sched->mlfq_quantum[level]) && (level < MLFQ_LEVELS - 1) ? 1 : 0;
+				int offset = sched->type==SCHED_MLFQ && (process->timeslice_used >= sched->mlfq_quantum[level]) && (level < MLFQ_LEVELS - 1) ? 1 : 0;
 				if (offset == 1)
 					process->timeslice_used = 0;
 				queue_push_tail(sched->input_queues[level+offset], process);

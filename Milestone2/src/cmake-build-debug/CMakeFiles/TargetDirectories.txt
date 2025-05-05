@@ -1,0 +1,3 @@
+/home/yassin/Desktop/Repos/OperatingSystems/Milestone2/src/cmake-build-debug/CMakeFiles/Milestone2OS.dir
+/home/yassin/Desktop/Repos/OperatingSystems/Milestone2/src/cmake-build-debug/CMakeFiles/edit_cache.dir
+/home/yassin/Desktop/Repos/OperatingSystems/Milestone2/src/cmake-build-debug/CMakeFiles/rebuild_cache.dir
