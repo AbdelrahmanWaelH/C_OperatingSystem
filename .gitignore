@@ -30,7 +30,7 @@
 
 #Executables
 *.exe
-*.out
+# *.out # Keep specific executables if needed, or generalize
 *.app
 .i86
 *.x86_64
@@ -52,5 +52,30 @@ Mkfile.old
 dkms.conf
 
 #Build files
-*.vscode
-/Milestone2/src/build
+# *.vscode # Already present, can be kept or removed if global vscode ignore is preferred
+# /Milestone2/src/build # Specific path, will be covered by more general rules
+
+# CMake and general build artifacts
+**/build/
+**/cmake-build-*/
+CMakeCache.txt
+**/CMakeCache.txt
+cmake_install.cmake
+**/cmake_install.cmake
+compile_commands.json
+**/compile_commands.json
+Makefile
+**/Makefile
+CMakeFiles/
+**/CMakeFiles/
+Milestone2OS # Specific executable name
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# IDE-specific files (general)
+.idea/
+*.swp
+*~
+.vscode

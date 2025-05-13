@@ -1,7 +1,0 @@
-GUI adds new processes? We only have 60 mem words!!!!
-How store instructions in memory word when memory word is string -> string?????
-    We believe "Line Num" -> "Line"
-Built-in C semaphore, or our own made semaphore?
-Which order do we load PCB?????????????????
-Why 3 variables if only 2 in text
-Variable names = a b c or can they be other names?

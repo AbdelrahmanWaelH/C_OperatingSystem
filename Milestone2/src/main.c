@@ -5,73 +5,16 @@
 #include <stdbool.h>
 #include "../include/FileReader.h"
 #include "../include/Queue.h"
-#include <semaphore.h>
-#include <stdarg.h>
+#include "../include/Semaphores.h"
+#include "../include/os_logic.h" // GUI will use this API
 
 #define CODE_SEGMENT_OFFSET 9
 #define MLFQ_LEVELS 4
-typedef enum { READY, RUNNING, BLOCKED,TERMINATED } ProcessState;
-
-typedef enum {
-	USER_INPUT,
-	USER_OUTPUT,
-	FILE_RW,
-	NIL,
-} Resource;
-
-typedef struct {
-	int id;
-	ProcessState state;
-	int priority;
-	int memory_start;
-	int memory_end;
-	int program_counter;
-
-	// virtual values
-	Resource blockedResource;
-	int timeslice_used;
-    int arrivalTime;
-	int time_in_queue;
-} ProcessControlBlock; // 6 words
-
-
-typedef enum { SCHED_FCFS, SCHED_ROUND_ROBIN, SCHED_MLFQ } SchedulerType;
-
-typedef struct Scheduler {
-	SchedulerType type;
-	Queue* input_queues[MLFQ_LEVELS];
-	Queue* output_queue;
-	int mlfq_quantum[MLFQ_LEVELS];
-	int rr_quantum;
-    ProcessControlBlock* running_process;
-} Scheduler;
-
-
-typedef struct {
-
-	char name[256];
-	char data[256];
-
-} MemoryWord;
-
-typedef struct {
-	MemoryWord memoryArray[60];
-} Memory;
-
-typedef struct {
-	char * filePath;
-	int arrivalTime;
-} WaitingProcess;
 
 extern sem_t userInputSemaphore;
 extern sem_t userOutputSemaphore;
 extern sem_t fileSemaphore;
 
-ProcessControlBlock* userInputBlockingProcess;
-ProcessControlBlock* userOutputBlockingProcess;
-ProcessControlBlock* fileBlockingProcess;
-
-int processIdCounter = 0;
 char* lastLine;
 
 void removeNewline(char* buffer)
@@ -82,10 +25,7 @@ void removeNewline(char* buffer)
 		buffer[length - 1] = '\0';
 	}
 }
-Scheduler* scheduler_new(SchedulerType type, ...);
-void scheduler_add_task(Scheduler* sched, ProcessControlBlock* process);
-void scheduler_step(Scheduler* sched);
-void scheduler_free(Scheduler* sched);
+// Scheduler functions are now part of os_logic.h, no need for these forward declarations
 
 void initMemory();
 void initPCBs();
@@ -96,15 +36,6 @@ void displayMemory(Memory* mainMemory);
 char* select_file_dialog(GtkWidget *parent_window);
 void checkWaitingQueue();
  // Forward declarations for existing scheduler functions
- extern void executeSingleLinePCB(ProcessControlBlock* processControlBlock);
- extern ProcessControlBlock loadProcess(char* filepath);
- extern Scheduler* scheduler_new(SchedulerType type, ...);
- extern void scheduler_add_task(Scheduler* sched, ProcessControlBlock* process);
- extern void scheduler_step(Scheduler* sched);
- extern void initMemory();
- extern void initSemaphores();
- extern void displayMemory(Memory* mainMemory);
- char* resourceToString(Resource resource);
 
  // Global variables
  GtkWidget *window;
@@ -146,19 +77,8 @@ void checkWaitingQueue();
  // Simulation state
  int cycle_count = 0;
  bool simulation_running = false;
- Scheduler *scheduler = NULL;
  GMainLoop *main_loop = NULL;
  guint timeout_id = 0;
- Queue* loadingQueue;
-
- // List of loaded processes
- ProcessControlBlock *loaded_processes[10];
- int num_loaded_processes = 0;
-
- // Reference to global memory
- extern Memory mainMemory;
- extern Queue blockedQueue;
- extern sem_t userInputSemaphore, userOutputSemaphore, fileSemaphore;
 
  // CSS Provider for styling
  GtkCssProvider *provider;
@@ -535,9 +455,8 @@ int main(int argc, char *argv[]) {
     setup_log_console(log_console_frame);
     setup_process_creation(process_creation_frame);
 
-    // Initialize the simulation
-    initMemory();
-    initSemaphores();
+    // Initialize the simulation logic
+    os_init();
 
     // Show all widgets
     gtk_widget_show_all(window);
@@ -995,41 +914,29 @@ static void on_browse_button_clicked(GtkButton *button, gpointer user_data) {
 }
 
 static void update_dashboard() {
-    // Update total processes
-    char total_str[10];
-    sprintf(total_str, "%d", num_loaded_processes);
-    gtk_label_set_text(GTK_LABEL(total_processes_label), total_str);
+    OSStatus status;
+    os_get_status(&status);
 
-    // Update current cycle
-    char cycle_str[10];
-    sprintf(cycle_str, "%d", cycle_count);
-    gtk_label_set_text(GTK_LABEL(current_cycle_label), cycle_str);
+    char buffer[256];
+    sprintf(buffer, "Total Processes: %d", status.total_processes);
+    gtk_label_set_text(GTK_LABEL(total_processes_label), buffer);
 
-    // Update active algorithm
-    int active_algo = gtk_combo_box_get_active(GTK_COMBO_BOX(algorithm_combo));
-    const char *algo_name;
+    sprintf(buffer, "Current Cycle: %d", status.current_cycle);
+    gtk_label_set_text(GTK_LABEL(current_cycle_label), buffer);
+    cycle_count = status.current_cycle; // Update local cycle_count if still needed by GUI logic
 
-    switch (active_algo) {
-        case 0:
-            algo_name = "FCFS";
-            break;
-        case 1:
-            algo_name = "Round Robin";
-            break;
-        case 2:
-            algo_name = "MLFQ";
-            break;
-        default:
-            algo_name = "Unknown";
+    const char* scheduler_name;
+    switch (status.scheduler_type) {
+        case SCHED_FCFS: scheduler_name = "FCFS"; break;
+        case SCHED_ROUND_ROBIN: scheduler_name = "Round Robin"; break;
+        case SCHED_MLFQ: scheduler_name = "MLFQ"; break;
+        default: scheduler_name = "Unknown"; break;
     }
+    sprintf(buffer, "Algorithm: %s", scheduler_name);
+    gtk_label_set_text(GTK_LABEL(algorithm_label), buffer);
 
-    gtk_label_set_text(GTK_LABEL(algorithm_label), algo_name);
-
-    // Update process list, queues, and other displays
     update_process_list();
     update_queues();
-    update_resource_management();
-    update_memory_viewer();
 }
 
 char* get_user_input_from_dialog(int process_id) {
@@ -1113,307 +1020,126 @@ void show_text_dialog(const char *text) {
 }
 
 static void update_process_list() {
-    // Clear current list
     gtk_list_store_clear(process_list_store);
+    ProcessControlBlock* processes[MAX_PROCESSES];
+    int count;
+    os_get_all_processes(processes, &count);
 
-    // Add all loaded processes
-    for (int i = 0; i < num_loaded_processes; i++) {
-        ProcessControlBlock *pcb = loaded_processes[i];
-        if (pcb == NULL) continue;
-
-        GtkTreeIter iter;
+    GtkTreeIter iter;
+    for (int i = 0; i < count; ++i) {
         gtk_list_store_append(process_list_store, &iter);
-
-        // Determine state string
-        const char *state = processToString(pcb->state);
-
-        // Add process to the list
+        char state_str[50];
+        strcpy(state_str, os_process_state_str(processes[i]->state));
         gtk_list_store_set(process_list_store, &iter,
-            0, pcb->id,
-            1, state,
-            2, pcb->priority,
-            3, pcb->memory_start,  // Fixed field name
-            4, pcb->memory_end,    // Fixed field name
-            5, pcb->program_counter,
-            -1);
+                           0, processes[i]->id,
+                           1, state_str, // Use API to convert state to string
+                           2, processes[i]->priority,
+                           3, processes[i]->program_counter,
+                           4, processes[i]->memory_start,
+                           5, processes[i]->memory_end,
+                           -1);
     }
 }
 
 static void update_queues() {
-    // Clear current queues
     gtk_list_store_clear(ready_queue_store);
     gtk_list_store_clear(blocked_queue_store);
     gtk_list_store_clear(running_process_store);
 
-    if (scheduler == NULL) return;
+    GtkTreeIter iter;
+    OSStatus status;
+    os_get_status(&status);
 
-    // Update running process display
-    if (scheduler->running_process != NULL) {
-        ProcessControlBlock *process = scheduler->running_process;
-        GtkTreeIter iter;
+    // Running Process
+    if (status.running_process) {
         gtk_list_store_append(running_process_store, &iter);
-
-        // Get current instruction
-        char instruction[256] = "Unknown";
-        if (process->program_counter >= 0 &&
-            process->memory_start + process->program_counter + CODE_SEGMENT_OFFSET <= process->memory_end) {
-        	int currentLine = process->memory_start + (process->program_counter != 0 ? process->program_counter - 1 : process->program_counter) + CODE_SEGMENT_OFFSET;
-        	char* line = mainMemory.memoryArray[currentLine].data;
-        	if (line != NULL) {
-        		snprintf(instruction, sizeof(instruction), "%s", line);
-        	}else {
-        		snprintf(instruction, sizeof(instruction), "%s", lastLine);
-        	}
-        }
-
+        char state_str[50];
+        strcpy(state_str, os_process_state_str(status.running_process->state));
         gtk_list_store_set(running_process_store, &iter,
-                          0, process->id,
-                          1, instruction,
-                          2, process->timeslice_used, // Time running
-                          -1);
+                           0, status.running_process->id,
+                           1, state_str,
+                           2, status.running_process->priority,
+                           -1);
     }
 
-    // Update ready queues based on scheduler type
-    for (int level = 0; level < (scheduler->type == SCHED_MLFQ ? MLFQ_LEVELS : 1); level++) {
-        Queue* current_queue = scheduler->input_queues[level];
-        if (current_queue == NULL || queue_is_empty(current_queue)) continue;
-
-        // Iterate through the queue without modifying it
-        Node* current = current_queue->head;
-        int position = 0;
-
-        while (current != NULL) {
-            ProcessControlBlock* process = (ProcessControlBlock*)current->data;
-            GtkTreeIter iter;
-            gtk_list_store_append(ready_queue_store, &iter);
-
-            // Get current instruction
-            char instruction[256] = "Unknown";
-            if (process->program_counter >= 0 &&
-                process->memory_start + process->program_counter + CODE_SEGMENT_OFFSET <= process->memory_end) {
-                // Get the instruction
-            	int memoryStart = process->memory_start;
-            	int currentLine = memoryStart + process->program_counter + CODE_SEGMENT_OFFSET;
-            	char* line = mainMemory.memoryArray[currentLine].data;
-            	if (line != NULL) {
-            		snprintf(instruction, sizeof(instruction), "%s", line);
-            	}else {
-            		snprintf(instruction, sizeof(instruction), "%s", lastLine);
-            	}
+    // Ready Queues
+    Queue* ready_queues[MLFQ_LEVELS];
+    os_get_ready_queue(ready_queues);
+    for (int i = 0; i < MLFQ_LEVELS; ++i) {
+        if (ready_queues[i]) {
+            Node* current = ready_queues[i]->head;
+            while (current != NULL) {
+                ProcessControlBlock* pcb = (ProcessControlBlock*)current->data;
+                if (pcb) {
+                    gtk_list_store_append(ready_queue_store, &iter);
+                    char state_str[50];
+                    strcpy(state_str, os_process_state_str(pcb->state));
+                    gtk_list_store_set(ready_queue_store, &iter,
+                                       0, pcb->id,
+                                       1, state_str,
+                                       2, pcb->priority,
+                                       -1);
+                }
+                current = current->next;
             }
-
-            // For MLFQ, show which level the process is in
-            char queue_info[32];
-            if (scheduler->type == SCHED_MLFQ) {
-                sprintf(queue_info, "Queue %d", level);
-            } else {
-                sprintf(queue_info, "Position %d", position);
-            }
-
-            gtk_list_store_set(ready_queue_store, &iter,
-                              0, process->id,
-                              1, instruction,
-                              2, process->time_in_queue,
-                              -1);
-
-            current = current->next;
-            position++;
         }
     }
 
-    // Update blocked queue
-    if (!queue_is_empty(&blockedQueue)) {
-        Node* current = blockedQueue.head;
-
-        while (current != NULL) {
-            ProcessControlBlock* process = (ProcessControlBlock*)current->data;
-            GtkTreeIter iter;
+    // Blocked Queue
+    Queue blocked_q_val;
+    os_get_blocked_queue(&blocked_q_val); // os_get_blocked_queue now takes a pointer to a Queue
+    Node* current_blocked = blocked_q_val.head;
+    while (current_blocked != NULL) {
+        ProcessControlBlock* pcb = (ProcessControlBlock*)current_blocked->data;
+        if (pcb) {
             gtk_list_store_append(blocked_queue_store, &iter);
-
-            // Determine blocking resource
-            char resource[32] = "Unknown";
-            switch (process->blockedResource) {
-                case FILE_RW:
-                    strcpy(resource, "File I/O");
-                    break;
-                case USER_INPUT:
-                    strcpy(resource, "User Input");
-                    break;
-                case USER_OUTPUT:
-                    strcpy(resource, "User Output");
-                    break;
-                default:
-                    strcpy(resource, "Unknown");
-                    break;
-            }
-
+            char state_str[50];
+            strcpy(state_str, os_process_state_str(pcb->state));
+            char resource_str[50];
+            strcpy(resource_str, os_resource_str(pcb->blockedResource)); 
             gtk_list_store_set(blocked_queue_store, &iter,
-                              0, process->id,
-                              1, resource,
-                              2, process->timeslice_used, // Time blocked
-                              -1);
-
-            current = current->next;
+                               0, pcb->id,
+                               1, state_str,
+                               2, resource_str, // Use API to convert resource to string
+                               -1);
         }
+        current_blocked = current_blocked->next;
     }
 }
 
 static void update_resource_management() {
-    // Clear current blocked resources list
+    // This function might need to be re-evaluated based on how os_logic exposes semaphore/mutex states.
+    // For now, let's assume os_logic handles resource contention internally and we display blocked processes.
     gtk_list_store_clear(blocked_resources_store);
-
-    // Update semaphore statuses
-    int userInputValue, userOutputValue, fileValue;
-    sem_getvalue(&userInputSemaphore, &userInputValue);
-    sem_getvalue(&userOutputSemaphore, &userOutputValue);
-    sem_getvalue(&fileSemaphore, &fileValue);
-
-    // Get the labels in the grid
-    GtkWidget *user_input_status = gtk_grid_get_child_at(GTK_GRID(mutex_status_grid), 1, 1);
-    GtkWidget *user_input_holder = gtk_grid_get_child_at(GTK_GRID(mutex_status_grid), 2, 1);
-    GtkWidget *user_output_status = gtk_grid_get_child_at(GTK_GRID(mutex_status_grid), 1, 2);
-    GtkWidget *user_output_holder = gtk_grid_get_child_at(GTK_GRID(mutex_status_grid), 2, 2);
-    GtkWidget *file_status = gtk_grid_get_child_at(GTK_GRID(mutex_status_grid), 1, 3);
-    GtkWidget *file_holder = gtk_grid_get_child_at(GTK_GRID(mutex_status_grid), 2, 3);
-
-    // Update status based on semaphore values
-    gtk_label_set_text(GTK_LABEL(user_input_status), userInputValue > 0 ? "Free" : "Locked");
-    gtk_label_set_text(GTK_LABEL(user_output_status), userOutputValue > 0 ? "Free" : "Locked");
-    gtk_label_set_text(GTK_LABEL(file_status), fileValue > 0 ? "Free" : "Locked");
-
-	if (userInputValue > 0) {
-		userInputBlockingProcess = NULL;
-	}
-
-	if (userOutputValue > 0) {
-		userOutputBlockingProcess = NULL;
-	}
-
-	if (fileValue > 0) {
-		fileBlockingProcess = NULL;
-	}
-
-	char buffer[100];
-
-	// For user input
-	if (userInputBlockingProcess == NULL) {
-		gtk_label_set_text(GTK_LABEL(user_input_holder), "None");
-	} else {
-		snprintf(buffer, sizeof(buffer), "Process %d", userInputBlockingProcess->id);
-		gtk_label_set_text(GTK_LABEL(user_input_holder), buffer);
-	}
-
-	// For user output
-	if (userOutputBlockingProcess == NULL) {
-		gtk_label_set_text(GTK_LABEL(user_output_holder), "None");
-	} else {
-		snprintf(buffer, sizeof(buffer), "Process %d", userOutputBlockingProcess->id);
-		gtk_label_set_text(GTK_LABEL(user_output_holder), buffer);
-	}
-
-	// For file
-	if (fileBlockingProcess == NULL) {
-		gtk_label_set_text(GTK_LABEL(file_holder), "None");
-	} else {
-		snprintf(buffer, sizeof(buffer), "Process %d", fileBlockingProcess->id);
-		gtk_label_set_text(GTK_LABEL(file_holder), buffer);
-	}
-
-
-    // Populate blocked resources list
-    // This would depend on how your system tracks blocked processes
-    // Here's a simplified example
-    Node *current = blockedQueue.head;
-
-    while (current != NULL) {
-        ProcessControlBlock *pcb = (ProcessControlBlock *)current->data;
-        if (pcb->blockedResource != NIL) {
-            GtkTreeIter iter;
-            gtk_list_store_append(blocked_resources_store, &iter);
-
-            gtk_list_store_set(blocked_resources_store, &iter,
-                              0, pcb->id,
-                              1, resourceToString(pcb->blockedResource),
-                              2, pcb->priority,
-                              -1);
-        }
-        current = current->next;
-    }
+    // The blocked_queue_view already shows processes and their blocked resources.
+    // If more detailed mutex status is needed, os_logic.h would need to provide an API for it.
+    add_event_message("Resource management view updated (primarily via blocked queue).");
 }
 
 static void update_memory_viewer() {
-    // This function should update the memory visualization
-    // For each memory cell, update its content
-    for (int i = 0; i < 60; i++) { // Use hardcoded 60 or define a MEMORY_SIZE constant
-        // Get the name and data widgets
-        GtkWidget *box = memory_cells[i];
-        if (box == NULL) {
-            continue; // Skip if this memory cell widget doesn't exist
-        }
+    Memory current_memory;
+    os_get_memory(&current_memory);
 
-        // Get the list of children ONCE
-        GList *children = gtk_container_get_children(GTK_CONTAINER(box));
-        if (children == NULL || children->data == NULL) {
-            continue; // Skip if no children or first child is NULL
-        }
-
-        GtkWidget *name_label = GTK_WIDGET(children->data);
-
-        // Check if there's a second child before accessing it
-        GtkWidget *data_label = NULL;
-        if (children->next != NULL && children->next->data != NULL) {
-            data_label = GTK_WIDGET(children->next->data);
+    for (int i = 0; i < MEMORY_SIZE; ++i) {
+        char cell_text[512]; // Increased buffer size
+        if (strlen(current_memory.memoryArray[i].name) > 0) {
+            // If name is present, it's likely an instruction or variable name
+            snprintf(cell_text, sizeof(cell_text), "P%s: %s", 
+                     current_memory.memoryArray[i].data, // Assuming data field stores Process ID or similar identifier
+                     current_memory.memoryArray[i].name);
+            gtk_widget_set_name(memory_cells[i], "memory-cell-used");
+        } else if (strlen(current_memory.memoryArray[i].data) > 0) {
+            // If only data is present (e.g. for variables without explicit names in this view)
+            snprintf(cell_text, sizeof(cell_text), "Data: %s", current_memory.memoryArray[i].data);
+            gtk_widget_set_name(memory_cells[i], "memory-cell-used");
         } else {
-            // Free the list and skip this iteration if there's no valid second child
-            g_list_free(children);
-            continue;
+            snprintf(cell_text, sizeof(cell_text), "Free");
+            gtk_widget_set_name(memory_cells[i], "memory-cell");
         }
-
-        // Set the process name that owns this memory cell
-        char name_str[20] = "";
-        for (int j = 0; j < num_loaded_processes; j++) {
-            ProcessControlBlock *pcb = loaded_processes[j];
-            if (pcb != NULL &&
-                i >= pcb->memory_start &&
-                i <= pcb->memory_end) {
-                sprintf(name_str, "P%d", pcb->id);
-                break;
-            }
-        }
-
-        gtk_label_set_text(GTK_LABEL(name_label), name_str);
-
-        // Set the data content - ensure valid data is available
-        if (i < sizeof(mainMemory.memoryArray) / sizeof(mainMemory.memoryArray[0]) &&
-            mainMemory.memoryArray[i].data != NULL &&
-            strlen(mainMemory.memoryArray[i].data) > 0) {
-            gtk_label_set_text(GTK_LABEL(data_label), mainMemory.memoryArray[i].data);
-        } else {
-            gtk_label_set_text(GTK_LABEL(data_label), "");
-        }
-
-        // Add highlighting if the cell is used
-        if (strlen(name_str) > 0) {
-            GtkStyleContext *context = gtk_widget_get_style_context(name_label);
-            gtk_style_context_add_class(context, "memory-cell-used");
-
-            if (data_label != NULL) {
-                context = gtk_widget_get_style_context(data_label);
-                gtk_style_context_add_class(context, "memory-cell-used");
-            }
-        } else {
-            GtkStyleContext *context = gtk_widget_get_style_context(name_label);
-            gtk_style_context_remove_class(context, "memory-cell-used");
-
-            if (data_label != NULL) {
-                context = gtk_widget_get_style_context(data_label);
-                gtk_style_context_remove_class(context, "memory-cell-used");
-            }
-        }
-
-        // Free the list when done with it
-        g_list_free(children);
+        gtk_label_set_text(GTK_LABEL(memory_cells[i]), cell_text);
     }
+    // Force re-application of CSS if needed, though set_name should trigger it.
+    gtk_style_context_reset_widgets(gdk_screen_get_default());
 }
 
 static void add_execution_log(const char *message) {
@@ -1451,1232 +1177,197 @@ static void add_event_message(const char *message) {
 }
 
 static void on_algorithm_changed(GtkComboBox *widget, gpointer user_data) {
-    // Get the selected algorithm
-    int selected = gtk_combo_box_get_active(widget);
-
-    // Enable/disable quantum spin button based on selection
-    if (selected == 1) {  // Round Robin
-        gtk_widget_set_sensitive(quantum_spin, TRUE);
-    } else {
-        gtk_widget_set_sensitive(quantum_spin, FALSE);
-    }
-
-    // Update algorithm label
-    const char *algo_name;
-    switch (selected) {
-        case 0:
-            algo_name = "FCFS";
-            break;
-        case 1:
-            algo_name = "Round Robin";
-            break;
-        case 2:
-            algo_name = "MLFQ";
-            break;
-        default:
-            algo_name = "Unknown";
-    }
-    gtk_label_set_text(GTK_LABEL(algorithm_label), algo_name);
-
-    // If the simulation is already running, we should recreate the scheduler
-    if (simulation_running) {
-        on_stop_button_clicked(NULL, NULL);
-        add_event_message("Scheduling algorithm changed, simulation stopped.");
+    // If simulation is not running, we can allow changing the algorithm.
+    // os_start will be called when the user presses start, with the new algorithm.
+    if (!simulation_running) {
+        const char *active_id = gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(widget));
+        if (active_id) {
+            add_event_message(g_strconcat("Scheduler algorithm selected: ", active_id, NULL));
+            if (strcmp(active_id, "Round Robin") == 0) {
+                gtk_widget_set_sensitive(quantum_spin, TRUE);
+            } else {
+                gtk_widget_set_sensitive(quantum_spin, FALSE);
+            }
+            g_free((void*)active_id);
+        }
     }
 }
 
 static void on_start_button_clicked(GtkButton *button, gpointer user_data) {
-    if (simulation_running) return;
-
-    // Check if we have processes loaded
-    // if (num_loaded_processes == 0) {
-    //     add_event_message("Cannot start simulation: No processes loaded.");
-    //     return;
-    // }
-
-    // Determine scheduler type
-    SchedulerType type;
-    int selected = gtk_combo_box_get_active(GTK_COMBO_BOX(algorithm_combo));
-
-    switch (selected) {
-        case 0:
-            type = SCHED_FCFS;
-            break;
-        case 1:
-            type = SCHED_ROUND_ROBIN;
-            break;
-        case 2:
-            type = SCHED_MLFQ;
-            break;
-        default:
-            type = SCHED_FCFS;
+    if (simulation_running) {
+        add_event_message("Simulation is already running.");
+        return;
     }
-
-    // Create scheduler with appropriate parameters
-    if (selected == 1) {  // Round Robin with quantum
-        int quantum = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(quantum_spin));
-        scheduler = scheduler_new(type, quantum);
-    } else {
-        scheduler = scheduler_new(type);
-    }
-
-    // Add all loaded processes to the scheduler
-    for (int i = 0; i < num_loaded_processes; i++) {
-        if (loaded_processes[i] != NULL) {
-            scheduler_add_task(scheduler, loaded_processes[i]);
-        }
-    }
-
-    // Start the simulation loop
     simulation_running = true;
-    timeout_id = g_timeout_add(200, simulation_step, NULL); // Run every 200ms
-
-    // Update button states
     gtk_widget_set_sensitive(start_button, FALSE);
     gtk_widget_set_sensitive(stop_button, TRUE);
+    gtk_widget_set_sensitive(reset_button, FALSE);
     gtk_widget_set_sensitive(step_button, FALSE);
-	gtk_widget_set_sensitive(step5_button, FALSE);
+    gtk_widget_set_sensitive(step5_button, FALSE);
     gtk_widget_set_sensitive(add_process_button, FALSE);
     gtk_widget_set_sensitive(algorithm_combo, FALSE);
     gtk_widget_set_sensitive(quantum_spin, FALSE);
 
+    SchedulerType selected_type;
+    const char *active_id = gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(algorithm_combo));
+    if (strcmp(active_id, "FCFS") == 0) selected_type = SCHED_FCFS;
+    else if (strcmp(active_id, "Round Robin") == 0) selected_type = SCHED_ROUND_ROBIN;
+    else if (strcmp(active_id, "MLFQ") == 0) selected_type = SCHED_MLFQ;
+    else selected_type = SCHED_FCFS; // Default
+    free((void*)active_id); // free the duplicated string
+
+    int quantum = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(quantum_spin));
+    os_start(selected_type, quantum);
+
     add_event_message("Simulation started.");
+    if (main_loop == NULL) {
+        main_loop = g_main_loop_new(NULL, FALSE);
+    }
+    timeout_id = g_timeout_add(1000, simulation_step, NULL); // 1 second interval
+    // g_main_loop_run(main_loop); // This would block, run in a separate thread if needed or rely on timeout
 }
 
 static void on_stop_button_clicked(GtkButton *button, gpointer user_data) {
-    if (!simulation_running) return;
-
-    // Stop the simulation loop
+    if (!simulation_running) {
+        add_event_message("Simulation is not running.");
+        return;
+    }
+    simulation_running = false;
     if (timeout_id > 0) {
         g_source_remove(timeout_id);
         timeout_id = 0;
     }
+    // if (main_loop != NULL && g_main_loop_is_running(main_loop)) {
+    //     g_main_loop_quit(main_loop);
+    // }
 
-    simulation_running = false;
-
-    // Update button states
     gtk_widget_set_sensitive(start_button, TRUE);
     gtk_widget_set_sensitive(stop_button, FALSE);
+    gtk_widget_set_sensitive(reset_button, TRUE);
+    gtk_widget_set_sensitive(step_button, TRUE);
     gtk_widget_set_sensitive(step5_button, TRUE);
     gtk_widget_set_sensitive(add_process_button, TRUE);
     gtk_widget_set_sensitive(algorithm_combo, TRUE);
-
-    // Enable quantum spin if Round Robin is selected
-    if (gtk_combo_box_get_active(GTK_COMBO_BOX(algorithm_combo)) == 1) {
-        gtk_widget_set_sensitive(quantum_spin, TRUE);
-    }
-
+    gtk_widget_set_sensitive(quantum_spin, TRUE);
     add_event_message("Simulation stopped.");
 }
 
 static void on_reset_button_clicked(GtkButton *button, gpointer user_data) {
-    // Stop the simulation if it's running
-    if (simulation_running) {
-        on_stop_button_clicked(NULL, NULL);
-    }
+    os_reset();
+    cycle_count = 0;
+    // num_loaded_processes = 0; // Resetting this here might clear processes before os_reset handles them
+                               // os_logic should manage its internal process list.
 
-    // Clear all processes
-    for (int i = 0; i < num_loaded_processes; i++) {
-        if (loaded_processes[i] != NULL) {
-            // Free process memory (if needed)
-            loaded_processes[i] = NULL;
-        }
-    }
-	// reset number of loaded processes
-	num_loaded_processes = 0;
-
-	// Reset cycle count
-	cycle_count = 0;
-
-	// reset the processIdCounter
-	processIdCounter = 0;
-
-	// Reset loading queue
-	if (loadingQueue != NULL) {
-		queue_free(loadingQueue);
-		loadingQueue = queue_new();
-	}
-
-	// clear the scheduler
-	if (scheduler != NULL) {
-		// Add any needed cleanup for scheduler
-		scheduler = NULL;
-	}
-
-	// Reset blocked queue - need to empty it
-	while (!queue_is_empty(&blockedQueue)) {
-		queue_free(&blockedQueue);
-	}
-
-	// Reset semaphores
-	sem_destroy(&userInputSemaphore);
-	sem_destroy(&userOutputSemaphore);
-	sem_destroy(&fileSemaphore);
-	sem_init(&userInputSemaphore, 0, 1);
-	sem_init(&userOutputSemaphore, 0, 1);
-	sem_init(&fileSemaphore, 0, 1);
-
-	// reset the semaphore blocked processes
-	userInputBlockingProcess = NULL;
-	userOutputBlockingProcess = NULL;
-	fileBlockingProcess = NULL;
-
-	// Reset last line
-	if (lastLine != NULL) {
-		free(lastLine);
-		lastLine = NULL;
-	}
-
-	// reset the sempahore locked processes
-	fileBlockingProcess = NULL;
-	userOutputBlockingProcess = NULL;
-	userInputBlockingProcess = NULL;
-    // Clear all displays
+    // Clear GUI elements
     gtk_list_store_clear(process_list_store);
     gtk_list_store_clear(ready_queue_store);
     gtk_list_store_clear(blocked_queue_store);
     gtk_list_store_clear(running_process_store);
-    gtk_list_store_clear(blocked_resources_store);
-	for (int i = 0; i < 60 ; i++) {
-		memset(mainMemory.memoryArray[i].data, 0, sizeof(mainMemory.memoryArray[i].data));
-		memset(mainMemory.memoryArray[i].name, 0, sizeof(mainMemory.memoryArray[i].name));
-	}
-    // Clear text buffers
     gtk_text_buffer_set_text(execution_log_buffer, "", -1);
     gtk_text_buffer_set_text(event_messages_buffer, "", -1);
 
-    // Update displays
-    update_dashboard();
+    // Reset UI state
+    gtk_widget_set_sensitive(start_button, TRUE);
+    gtk_widget_set_sensitive(stop_button, FALSE);
+    gtk_widget_set_sensitive(reset_button, TRUE);
+    gtk_widget_set_sensitive(step_button, TRUE);
+    gtk_widget_set_sensitive(step5_button, TRUE);
+    gtk_widget_set_sensitive(add_process_button, TRUE);
+    gtk_widget_set_sensitive(algorithm_combo, TRUE);
+    gtk_widget_set_sensitive(quantum_spin, TRUE);
+    simulation_running = false;
+    if (timeout_id > 0) {
+        g_source_remove(timeout_id);
+        timeout_id = 0;
+    }
+    // if (main_loop != NULL && g_main_loop_is_running(main_loop)) {
+    //     g_main_loop_quit(main_loop);
+    // }
+    // if (main_loop != NULL) {
+    //     g_main_loop_unref(main_loop);
+    //     main_loop = NULL;
+    // }
 
-    add_event_message("Simulation reset. All processes and memory cleared.");
+    update_dashboard();
+    update_memory_viewer();
+    add_event_message("Simulation reset.");
 }
 
 static void on_step_button_clicked(GtkButton *button, gpointer user_data) {
-    if (simulation_running) return;
-
-    // Check if we have processes loaded
-    // if (num_loaded_processes == 0) {
-    //     add_event_message("Cannot step simulation: No processes loaded.");
-    //     return;
-    // }
-
-
-
-    // Create scheduler if not exists
-    if (scheduler == NULL) {
-        // Determine scheduler type
-        SchedulerType type;
-        int selected = gtk_combo_box_get_active(GTK_COMBO_BOX(algorithm_combo));
-
-        switch (selected) {
-            case 0:
-                type = SCHED_FCFS;
-                break;
-            case 1:
-                type = SCHED_ROUND_ROBIN;
-                break;
-            case 2:
-                type = SCHED_MLFQ;
-                break;
-            default:
-                type = SCHED_FCFS;
-        }
-
-        // Create scheduler with appropriate parameters
-        if (selected == 1) {  // Round Robin with quantum
-            int quantum = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(quantum_spin));
-            scheduler = scheduler_new(type, quantum);
-        } else {
-            scheduler = scheduler_new(type);
-        }
-
-        // Add all loaded processes to the scheduler
-        for (int i = 0; i < num_loaded_processes; i++) {
-            if (loaded_processes[i] != NULL) {
-                scheduler_add_task(scheduler, loaded_processes[i]);
-            }
-        }
-
-        add_event_message("Scheduler initialized.");
+    if (simulation_running) {
+        add_event_message("Cannot step while simulation is running automatically. Stop first.");
+        return;
     }
-
-    // Execute one step
-    simulation_step(NULL);
+    os_step();
+    update_dashboard();
+    update_memory_viewer();
+    update_resource_management(); 
+    add_event_message("Simulation stepped forward by one cycle.");
+    if(os_is_finished()){
+        add_event_message("All processes terminated. Simulation finished.");
+        on_stop_button_clicked(NULL,NULL); // Reuse stop logic
+    }
 }
 
 static void on_step5_clicked(GtkButton *button, gpointer user_data) {
-	for (int i=0;i<5;i++) {
-		on_step_button_clicked(button,user_data);
-	}
-}
-// Function to create a file chooser dialog and return the selected filename
-char* select_file_dialog(GtkWidget *parent_window) {
-    GtkWidget *dialog;
-    char *filename = NULL;
-
-    dialog = gtk_file_chooser_dialog_new("Select Process File",
-                                        GTK_WINDOW(parent_window),
-                                        GTK_FILE_CHOOSER_ACTION_OPEN,
-                                        "Cancel", GTK_RESPONSE_CANCEL,
-                                        "Open", GTK_RESPONSE_ACCEPT,
-                                        NULL);
-
-    // Set up a filter for .txt files
-    GtkFileFilter *filter = gtk_file_filter_new();
-    gtk_file_filter_set_name(filter, "Text Files");
-    gtk_file_filter_add_pattern(filter, "*.txt");
-    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
-
-    // Show the dialog and wait for a response
-    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
-        filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+    if (simulation_running) {
+        add_event_message("Cannot step while simulation is running automatically. Stop first.");
+        return;
     }
-
-    gtk_widget_destroy(dialog);
-    return filename;
+    for(int i=0; i<5; ++i){
+        os_step();
+        if(os_is_finished()){
+            add_event_message("All processes terminated during 5-step. Simulation finished.");
+            break; 
+        }
+    }
+    update_dashboard();
+    update_memory_viewer();
+    update_resource_management();
+    add_event_message("Simulation stepped forward by up to 5 cycles.");
+    if(os_is_finished()){
+        on_stop_button_clicked(NULL,NULL); // Reuse stop logic
+    }
 }
 
 static void on_add_process_button_clicked(GtkButton *button, gpointer user_data) {
-    // Count how many processes were selected
-    int count = 0;
-    char *selected_files[10] = {NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL};
-    int arrival_times[10];
-
-    for (int i = 0; i < 10; i++) {
-        const char *file = gtk_entry_get_text(GTK_ENTRY(gtk_bin_get_child(GTK_BIN(process_files_combo[i]))));
-        if (file != NULL && strlen(file) > 0) {
-            selected_files[count] = strdup(file);
-            arrival_times[count] = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(arrival_time_entries[i]));
-            count++;
+    // This function now iterates through the GUI entries and calls os_add_process
+    // It assumes os_add_process will handle loading and placing into a loading queue if necessary.
+    for (int i = 0; i < 10; ++i) {
+        const char *filepath = gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(process_files_combo[i]));
+        if (filepath && strlen(filepath) > 0) {
+            int arrival_time = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(arrival_time_entries[i]));
+            ProcessControlBlock* new_pcb = os_add_process(filepath, arrival_time);
+            if (new_pcb) {
+                char msg[300];
+                snprintf(msg, sizeof(msg), "Process %d from %s added with arrival time %d.", new_pcb->id, filepath, arrival_time);
+                add_event_message(msg);
+            } else {
+                char msg[300];
+                snprintf(msg, sizeof(msg), "Failed to add process from %s (max processes reached or file error).", filepath);
+                add_event_message(msg);
+            }
+            g_free((void*)filepath); // Free the string obtained from get_active_text
         }
     }
-
-    if (count == 0) {
-        add_event_message("No processes selected.");
-        return;
-    }
-
-    // Load each selected process
-    for (int i = 0; i < count; i++) {
-	    // Check if we have space for more processes
-    	if (num_loaded_processes >= 10) {
-    		add_event_message("Cannot load more processes: Maximum limit reached.");
-    		free(selected_files[i]);
-    		continue;
-    	}
-		if (selected_files[i]!=NULL) {
-			if (arrival_times[i] == 0) {
-				// Set arrival time - only if you've added the field to the struct
-				// Load the process
-				ProcessControlBlock pcb = loadProcess(selected_files[i]);
-				pcb.arrivalTime = arrival_times[i];
-				// Store the process
-				loaded_processes[num_loaded_processes] = malloc(sizeof(ProcessControlBlock));
-				memcpy(loaded_processes[num_loaded_processes], &pcb, sizeof(ProcessControlBlock));
-				num_loaded_processes++;
-			}else {
-				if (loadingQueue ==NULL) {
-					loadingQueue = queue_new();
-				}
-				WaitingProcess* p = (WaitingProcess*)malloc(sizeof(WaitingProcess));
-				p->arrivalTime = arrival_times[i];
-				p->filePath = strdup(selected_files[i]);
-				queue_push_tail(loadingQueue, p);
-			}
-
-
-			// Log the event
-			char message[256];
-			sprintf(message, "Process loaded from %s with arrival time %d.",
-					selected_files[i], arrival_times[i]);
-			add_event_message(message);
-
-			// Free the file name
-			free(selected_files[i]);
-		}
-
-    }
-
-    // Update the displays
-    update_dashboard();
-
-	// redirect to dashboard window using the global notebook
-	gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 0);
+    update_dashboard(); // Update display after adding processes
 }
 
 static gboolean simulation_step(gpointer user_data) {
-    // Execute one simulation step
-    cycle_count++;
-
-    // Update the cycle count label
-    char cycle_str[10];
-    sprintf(cycle_str, "%d", cycle_count);
-    gtk_label_set_text(GTK_LABEL(current_cycle_label), cycle_str);
-
-    // Step the scheduler
-    if (scheduler != NULL) {
-    	// Step the scheduler
-    	scheduler_step(scheduler);
-
-        char log_message[256];
-
-        // Check if we have a running process
-        if (scheduler->running_process != NULL) {
-            ProcessControlBlock *running = scheduler->running_process;
-
-        	char instruction[256] = "Unknown";
-        	// Get the instruction
-        	int memoryStart = running->memory_start;
-        	int currentLine = memoryStart + running->program_counter + CODE_SEGMENT_OFFSET - 1;
-        	char* line = mainMemory.memoryArray[currentLine].data;
-			if (line != NULL && line[0] != '\0') {
-        		snprintf(instruction, sizeof(instruction), "%s", line);
-        	}else {
-        		snprintf(instruction, sizeof(instruction), "%s", lastLine);
-        	}
-
-            if (instruction != NULL && strcmp("Unknown",instruction) != 0 ) {
-                sprintf(log_message, "Process %d executing: %s",running->id, instruction);
-                add_execution_log(log_message);
-            }
-        }
-
-
-        // Check for finished processes
-        bool all_terminated = true;
-        for (int i = 0; i < num_loaded_processes; i++) {
-            if (loaded_processes[i] != NULL && loaded_processes[i]->state != TERMINATED) {
-                all_terminated = false;
-                break;
-            }
-        }
-
-        if (all_terminated) {
-            add_event_message("All processes have terminated. Simulation complete.");
-            on_stop_button_clicked(NULL, NULL);
-            return FALSE; // Stop the timer
-        }
+    if (!simulation_running) {
+        return G_SOURCE_REMOVE; // Stop the timer if simulation was stopped
     }
 
-    // Update all displays
+    os_step();
     update_dashboard();
-    return TRUE; // Continue the timer
-}
-// --------------------------- main functionallity --------------------------
-
-/*Safer posting for semaphore to avoid overflow/underflow*/
-void safe_sem_post(sem_t* __sem);
-
-/*Safer wait for semaphore to avoid overflow/underflow*/
-void safe_sem_wait(sem_t* __sem);
-
-ProcessControlBlock loadProcess(char* filepath);
-void executeSingleLinePCB(ProcessControlBlock* processControlBlock);
-char** lineParser(char* line);
-
-
-Memory mainMemory;
-Queue blockedQueue;
-
-void executeSingleLinePCB(ProcessControlBlock* processControlBlock)
-{
- //This is so i can commit :D
-	int memoryStart = processControlBlock->memory_start;
-	int currentLine = memoryStart + processControlBlock->program_counter + CODE_SEGMENT_OFFSET;
-
-	// printf("%d\n", processControlBlock->id);
-
-	char* line = mainMemory.memoryArray[currentLine].data;
-	lastLine = strdup(line);
-	char** tokens = lineParser(line);
-
-	// printf("Currently at PC: %d\n", processControlBlock->program_counter);
-
-	/*
-		Tokens:
-			assign
-			semWait
-			semSignal
-			print
-			printFromTo
-	*/
-
-	if (strcmp(tokens[0], "assign") == 0) {
-		char* target = tokens[1];
-
-        bool flag = false;        
-        for( int i =6; i<= 8; i++){
-            if(strcmp(target, mainMemory.memoryArray[processControlBlock->memory_start + i].name) ==0){
-                break;
-            }
-			printf("%d",strlen(mainMemory.memoryArray[processControlBlock->memory_start+i].name));
-            if(strlen(mainMemory.memoryArray[processControlBlock->memory_start+i].data)==0){
-                strcpy(mainMemory.memoryArray[processControlBlock->memory_start+i].name, target);
-            	break;
-            }
-        }
-
-
-		char* value = tokens[2];
-
-		value[strcspn(value, "\r\n")] = '\0';
-
-		if (strcmp(value, "readFile") == 0) {
-			/*
-			Handle Case for
-				assign a readfile b
-			*/
-
-			char* filepathVar = tokens[3];
-			// removeNewline(filepathVar);
-			filepathVar[strcspn(filepathVar, "\r\n")] = '\0';
-
-			char filepath[256];
-
-			if (strcmp(filepathVar, "a") == 0) {
-				// mainMemory.memoryArray[processControlBlock->memory_start + 6].data =
-				// fileString;
-				strcpy(
-					filepath, mainMemory.memoryArray[processControlBlock->memory_start + 6].data);
-			} else if (strcmp(filepathVar, "b") == 0) {
-				// mainMemory.memoryArray[processControlBlock->memory_start + 7].data =
-				// fileString;
-				strcpy(
-					filepath, mainMemory.memoryArray[processControlBlock->memory_start + 7].data);
-			} else {
-				// mainMemory.memoryArray[processControlBlock->memory_start + 8].data =
-				// fileString;
-				strcpy(
-					filepath, mainMemory.memoryArray[processControlBlock->memory_start + 8].data);
-			}
-
-
-			char* fileString = readFile(filepath);
-
-			// printf("Read File String: %s", fileString);
-
-			// printf("Found file path\n");
-
-			if (strcmp(target, mainMemory.memoryArray[processControlBlock->memory_start + 6].name) == 0) {
-				// mainMemory.memoryArray[processControlBlock->memory_start + 6].data =
-				// fileString;
-				strcpy(
-					mainMemory.memoryArray[processControlBlock->memory_start + 6].data, fileString);
-			} else if (strcmp(target, mainMemory.memoryArray[processControlBlock->memory_start + 7].name) == 0) {
-				// mainMemory.memoryArray[processControlBlock->memory_start + 7].data =
-				// fileString;
-				strcpy(
-					mainMemory.memoryArray[processControlBlock->memory_start + 7].data, fileString);
-			} else if (strcmp(target, mainMemory.memoryArray[processControlBlock->memory_start + 8].name) == 0) {
-				// mainMemory.memoryArray[processControlBlock->memory_start + 8].data =
-				// fileString;
-				strcpy(
-					mainMemory.memoryArray[processControlBlock->memory_start + 8].data, fileString);
-			}
-
-		} else if (strcmp(value, "input") == 0) {
-
-			/*
-			Handle Case for
-				assign a input
-			*/
-
-            char userInputValue[256] = { 0 };
-            char* user_input = get_user_input_from_dialog(processControlBlock->id);
-            strcpy(userInputValue, user_input);
-
-			if (strcmp(target, mainMemory.memoryArray[processControlBlock->memory_start + 6].name) == 0) {
-				// mainMemory.memoryArray[processControlBlock->memory_start + 6].data =
-				// userInputValue;
-				strcpy(mainMemory.memoryArray[processControlBlock->memory_start + 6].data,
-					userInputValue);
-
-			} else if (strcmp(target, mainMemory.memoryArray[processControlBlock->memory_start + 7].name) == 0) {
-				// mainMemory.memoryArray[processControlBlock->memory_start + 7].data =
-				// userInputValue;
-				strcpy(mainMemory.memoryArray[processControlBlock->memory_start + 7].data,
-					userInputValue);
-			} else if (strcmp(target, mainMemory.memoryArray[processControlBlock->memory_start + 8].name) == 0){
-				// mainMemory.memoryArray[processControlBlock->memory_start + 8].data =
-				// userInputValue;
-				strcpy(mainMemory.memoryArray[processControlBlock->memory_start + 8].data,
-					userInputValue);
-			}
-
-		} else {
-			/*
-	  Handle Case for
-	  assign a b
-	  */
-
-			int indexOfTarget = 0;
-			int indexOfValue = 0;
-			for (int i = 6; i <= 8; i++) {
-				if (strcmp(
-						mainMemory.memoryArray[processControlBlock->memory_start + i].name, target)
-					== 0) {
-					indexOfTarget = i;
-				}
-				if (strcmp(
-						mainMemory.memoryArray[processControlBlock->memory_start + i].name, value)
-					== 0) {
-					indexOfValue = i;
-				}
-			}
-
-			// mainMemory.memoryArray[processControlBlock->memory_start +
-			// indexOfTarget].data =
-			// mainMemory.memoryArray[processControlBlock->memory_start +
-			// indexOfValue].data;
-			strcpy(mainMemory.memoryArray[processControlBlock->memory_start + indexOfTarget].data,
-				mainMemory.memoryArray[processControlBlock->memory_start + indexOfValue].data);
-		}
-
-	} else if (strcmp(tokens[0], "print") == 0) {
-		char* value = tokens[1];
-		char data[256];
-
-		if (strcmp(value, mainMemory.memoryArray[processControlBlock->memory_start + 6].name) == 0) {
-			// mainMemory.memoryArray[processControlBlock->memory_start + 6].data =
-			// userInputValue;
-			strcpy(data, mainMemory.memoryArray[processControlBlock->memory_start + 6].data);
-
-		} else if (strcmp(value, mainMemory.memoryArray[processControlBlock->memory_start + 7].name) == 0) {
-			// mainMemory.memoryArray[processControlBlock->memory_start + 7].data =
-			// userInputValue;
-			strcpy(data, mainMemory.memoryArray[processControlBlock->memory_start + 7].data);
-		} else if (strcmp(value, mainMemory.memoryArray[processControlBlock->memory_start + 8].name) == 0) {
-			// mainMemory.memoryArray[processControlBlock->memory_start + 8].data =
-			// userInputValue;
-			strcpy(data, mainMemory.memoryArray[processControlBlock->memory_start + 8].data);
-		}
-
-		show_text_dialog(data);
-	} else if (strcmp(tokens[0], "printFromTo") == 0) {
-		char* start = tokens[1];
-		char* end = tokens[2];
-
-		end[strcspn(end, "\r\n")] = '\0';
-
-		int indexOfValue = 0;
-		char* dataStart;
-		char* dataEnd;
-
-		// displayMemory(&mainMemory);
-
-		for (int i = 6; i <= 8; i++) {
-			if (strcmp(mainMemory.memoryArray[processControlBlock->memory_start + i].name, start)
-				== 0) {
-				dataStart = mainMemory.memoryArray[processControlBlock->memory_start + i].data;
-			}
-		}
-		for (int i = 6; i <= 8; i++) {
-
-			if (strcmp(mainMemory.memoryArray[processControlBlock->memory_start + i].name, end)
-				== 0) {
-				dataEnd = mainMemory.memoryArray[processControlBlock->memory_start + i].data;
-			}
-		}
-
-		int startInt = atoi(dataStart);
-		int endInt = atoi(dataEnd);
-
-        char buffer[4096];
-        sprintf(buffer, "Numbers from %d to %d: \n", startInt, endInt);
-        for (int i = startInt; i <= endInt; i++) {
-            char num[16];
-            sprintf(num, " %d", i);
-            strncat(buffer, num, sizeof(buffer) - strlen(buffer) - 1);
-        }
-
-        show_text_dialog(buffer);
-	} else if (strcmp(tokens[0], "semWait") == 0) {
-		char* resource = tokens[1];
-		int semValue;
-		int* pid = malloc(sizeof(int));
-		*pid = processControlBlock->id;
-		if (strcmp(resource, "file\r\n") == 0 || strcmp(resource, "file") == 0) {
-			sem_getvalue(&fileSemaphore, &semValue);
-			if (semValue == 0) {
-				processControlBlock->state = BLOCKED;
-				processControlBlock->blockedResource = FILE_RW;
-			} else {
-				fileBlockingProcess = processControlBlock;
-				safe_sem_wait(&fileSemaphore);
-			}
-
-		} else if (strcmp(resource, "userInput\r\n") == 0 || strcmp(resource, "userInput") == 0) {
-			sem_getvalue(&userInputSemaphore, &semValue);
-			if (semValue == 0) {
-				processControlBlock->state = BLOCKED;
-				processControlBlock->blockedResource = USER_INPUT;
-			} else {
-				userInputBlockingProcess = processControlBlock;
-				safe_sem_wait(&userInputSemaphore);
-			}
-		} else if (strcmp(resource, "userOutput\r\n") == 0 || strcmp(resource, "userOutput") == 0) {
-			sem_getvalue(&userOutputSemaphore, &semValue);
-			if (semValue == 0) {
-				processControlBlock->state = BLOCKED;
-				processControlBlock->blockedResource = USER_OUTPUT;
-			} else {
-				userOutputBlockingProcess = processControlBlock;
-				safe_sem_wait(&userOutputSemaphore);
-			}
-		}
-
-	} else if (strcmp(tokens[0], "semSignal") == 0) {
-		char* resource = tokens[1];
-		if (strcmp(resource, "file\r\n") == 0 || strcmp(resource, "file") == 0) {
-			safe_sem_post(&fileSemaphore);
-		} else if (strcmp(resource, "userInput\r\n") == 0 || strcmp(resource, "userInput") == 0) {
-			safe_sem_post(&userInputSemaphore);
-		} else if (strcmp(resource, "userOutput\r\n") == 0 || strcmp(resource, "userOutput") == 0) {
-			safe_sem_post(&userOutputSemaphore);
-		}
-
-	} else if (strcmp(tokens[0], "writeFile") == 0) {
-		char* filenameVar = tokens[1];
-		char* dataVar = tokens[2];
-		dataVar[strcspn(dataVar, "\r\n")] = '\0';
-
-		char* dataToWrite;
-		char* filename;
-
-		for (int i = 6; i <= 8; i++) {
-			if (strcmp(mainMemory.memoryArray[processControlBlock->memory_start + i].name, dataVar)
-				== 0) {
-				dataToWrite = mainMemory.memoryArray[processControlBlock->memory_start + i].data;
-			}
-			if (strcmp(
-					mainMemory.memoryArray[processControlBlock->memory_start + i].name, filenameVar)
-				== 0) {
-				filename = mainMemory.memoryArray[processControlBlock->memory_start + i].data;
-			}
-		}
-
-		FILE* newFile = fopen(filename, "w");
-		fprintf(newFile, "%s", dataToWrite);
-		fflush(newFile);
-
-	}
-
-	else {
-		// Unknown instruction
-		printf("Unknown instruction: %s\n", tokens[0]);
-	}
-
-	processControlBlock->program_counter += 1;
-}
-
-char** lineParser(char* line)
-{
-
-	char** tokenArray
-		= (char**)malloc(sizeof(char*) * 16); // Assuming maximum of 8 tokens per line.
-
-	char lineCopy[strlen(line) + 10];
-	line[strcspn(line, "\r\n")] = '\0';
-	strcpy(lineCopy, line);
-	char* token = strtok(lineCopy, " ");
-
-	int counter = 0;
-
-	while (token != NULL) {
-		tokenArray[counter++] = strdup(token);
-		token = strtok(NULL, " ");
-	}
-	tokenArray[counter] = NULL;
-
-	return tokenArray;
-}
-
-void safe_sem_post(sem_t* __sem)
-{
-
-	int value;
-	sem_getvalue(__sem, &value);
-
-	if (value >= 1)
-		return;
-
-	sem_post(__sem);
-}
-
-void safe_sem_wait(sem_t* __sem)
-{
-
-	int value;
-	sem_getvalue(__sem, &value);
-
-	if (value <= 0)
-		return;
-
-	sem_wait(__sem);
-}
-
-void initMemory()
-{
-	for (int i = 0; i < 60; i++) {
-
-		// mainMemory.memoryArray[i].name = malloc(64 * sizeof(char)); // or any
-		// size you need mainMemory.memoryArray[i].data = malloc(64 * sizeof(char));
-		// // or any size you need
-	}
-}
-
-void checkWaitingQueue() {
-	if (loadingQueue == NULL || queue_is_empty(loadingQueue)) {
-		return;  // Nothing to do if queue is empty
-	}
-
-	Queue* temp = queue_new();
-	while (!queue_is_empty(loadingQueue)) {
-		WaitingProcess* wp = (WaitingProcess*)queue_pop_head(loadingQueue);
-		if (wp->arrivalTime == cycle_count-1) {
-			ProcessControlBlock pcb = loadProcess(wp->filePath);
-			loaded_processes[num_loaded_processes] = malloc(sizeof(ProcessControlBlock));
-			memcpy(loaded_processes[num_loaded_processes], &pcb, sizeof(ProcessControlBlock));
-			scheduler_add_task(scheduler, loaded_processes[num_loaded_processes]);
-			num_loaded_processes++;
-			free(wp);
-		} else {
-			queue_push_tail(temp, wp);
-		}
-	}
-
-	queue_free(loadingQueue);
-	loadingQueue = temp;
-}
-
-ProcessControlBlock loadProcess(char* filepath)
-{
-
-	ProcessControlBlock pcb;
-
-	int indexOfFree = 0;
-	while (strcmp(mainMemory.memoryArray[indexOfFree].name, "")) {
-		indexOfFree++;
-	}
-
-	if (indexOfFree > 40) {
-		perror("Not enough memory to store process in memory");
-		return pcb;
-	}
-
-	pcb.id = processIdCounter;
-	processIdCounter++;
-
-	pcb.memory_start = indexOfFree;
-
-	pcb.priority = 0;
-
-	pcb.program_counter = 0;
-
-	pcb.state = READY;
-	pcb.blockedResource = NIL;
-	pcb.timeslice_used = 0;
-	pcb.time_in_queue = 0;
-	//TODO the whole arrival time logic needs to be enhanced !
-	pcb.arrivalTime = 0;
-	char* buffer = malloc(256);
-
-	// mainMemory.memoryArray[pcb.memory_start + 0].name = "pid";
-	strcpy(mainMemory.memoryArray[pcb.memory_start + 0].name, "pid");
-	sprintf(buffer, "%d", pcb.id);
-	strcpy(mainMemory.memoryArray[pcb.memory_start + 0].data, buffer);
-
-	// mainMemory.memoryArray[pcb.memory_start + 1].name = "mem_start";
-	strcpy(mainMemory.memoryArray[pcb.memory_start + 1].name, "mem_start");
-	sprintf(buffer, "%d", pcb.memory_start);
-	strcpy(mainMemory.memoryArray[pcb.memory_start + 1].data, buffer);
-
-	// mainMemory.memoryArray[pcb.memory_start + 2].name = "mem_end";
-	strcpy(mainMemory.memoryArray[pcb.memory_start + 2].name, "mem_end");
-	sprintf(buffer, "%d", pcb.memory_end);
-	strcpy(mainMemory.memoryArray[pcb.memory_start + 2].data, buffer);
-
-	// mainMemory.memoryArray[pcb.memory_start + 3].name = "priority";
-	strcpy(mainMemory.memoryArray[pcb.memory_start + 3].name, "priority");
-	sprintf(buffer, "%d", pcb.priority);
-	strcpy(mainMemory.memoryArray[pcb.memory_start + 3].data, buffer);
-
-	// mainMemory.memoryArray[pcb.memory_start + 4].name = "program_counter";
-	strcpy(mainMemory.memoryArray[pcb.memory_start + 4].name, "program_counter");
-	sprintf(buffer, "%d", pcb.program_counter);
-	strcpy(mainMemory.memoryArray[pcb.memory_start + 4].data, buffer);
-
-	// mainMemory.memoryArray[pcb.memory_start + 5].name = "state";
-	strcpy(mainMemory.memoryArray[pcb.memory_start + 5].name, "state");
-	sprintf(buffer, "%s", processToString(pcb.state));
-	strcpy(mainMemory.memoryArray[pcb.memory_start + 5].data, buffer);
-
-	strcpy(mainMemory.memoryArray[pcb.memory_start + 6].name, "Var");
-	strcpy(mainMemory.memoryArray[pcb.memory_start + 7].name, "Var");
-	strcpy(mainMemory.memoryArray[pcb.memory_start + 8].name, "Var");
-
-	FILE* code_file = fopen(filepath, "r");
-
-	if (code_file == NULL) {
-		perror("Unable to open file");
-	}
-
-	int code_segment_line = 0;
-
-	while (fgets(buffer, 256, code_file)) {
-
-		strcpy(
-			mainMemory.memoryArray[pcb.memory_start + CODE_SEGMENT_OFFSET + code_segment_line].name,
-			"code");
-		// memcpy(mainMemory.memoryArray[pcb.memory_start + CODE_SEGMENT_OFFSET +
-		// code_segment_line].data, buffer, 256); printf("Buffer: %c\n", buffer[7]);
-
-		for (int i = 0; i < 256; i++) {
-			mainMemory.memoryArray[pcb.memory_start + CODE_SEGMENT_OFFSET + code_segment_line]
-				.data[i]
-				= buffer[i];
-		}
-
-		code_segment_line++;
-	}
-	code_segment_line--;
-	pcb.memory_end = pcb.memory_start + CODE_SEGMENT_OFFSET + code_segment_line;
-	printf("PID: %d, Start: %d, Lines of Code: %d, Memory End: %d\n", pcb.id, pcb.memory_start,
-		code_segment_line, pcb.memory_end);
-
-	strcpy(mainMemory.memoryArray[pcb.memory_start + 2].name, "mem_end");
-	sprintf(buffer, "%d", pcb.memory_end);
-	strcpy(mainMemory.memoryArray[pcb.memory_start + 2].data, buffer);
-
-	return pcb;
-}
-
-char* processToString(ProcessState state)
-{
-	switch (state) {
-        case READY:
-            return "ready";
-            break;
-
-        case BLOCKED:
-            return "blocked";
-            break;
-
-        case RUNNING:
-            return "running";
-            break;
-        case TERMINATED:
-            return "terminated";
-            break;
-
-        default:
-            break;
-	}
-}
-
-char* resourceToString(Resource resource){
-	switch (resource) {
-		case USER_INPUT:
-			return "User Input";
-			break;
-
-		case USER_OUTPUT:
-			return "User Output";
-			break;
-
-		case FILE_RW:
-			return "File";
-			break;
-		case NIL:
-			return "None";
-			break;
-
-		default:
-			break;
-	}
-}
-
-void displayMemory(Memory* mainMemory)
-{
-	printf("Memory Contents:\n");
-
-	for (int i = 0; i < 60; i++) {
-		// Check if name and data are valid (not NULL)
-		if (mainMemory->memoryArray[i].name != NULL && mainMemory->memoryArray[i].data != NULL) {
-			printf("Index %d: { Key: '%s', Value: '%s' }\n", i, mainMemory->memoryArray[i].name,
-				mainMemory->memoryArray[i].data);
-		} else {
-			printf("Index %d: { Key: NULL, Value: NULL }\n", i);
-		}
-	}
-}
-
-// ===============------------------= Schedule Stuff ================
-
-Scheduler* scheduler_new(SchedulerType type, ...)
-{
-	Scheduler* s = (Scheduler*)malloc(sizeof(Scheduler));
-	s->type = type;
-	va_list args;
-	va_start(args, type);
-	if (type == SCHED_ROUND_ROBIN)
-		s->rr_quantum = va_arg(args, int);
-	else
-		s->rr_quantum = 0;
-	va_end(args);
-
-	for (int i = 0; i < MLFQ_LEVELS; i++)
-		s->input_queues[i] = queue_new();
-	s->output_queue = queue_new();
-	int base = 1;
-	for (int i = 0; i < MLFQ_LEVELS; i++)
-		s->mlfq_quantum[i] = base << i; // 1, 2, 4, 8
-	s->running_process = NULL;
-	return s;
-}
-
-void scheduler_add_task(Scheduler* sched, ProcessControlBlock* process)
-{
-	queue_push_tail(sched->input_queues[0], process);
-}
-void terminateProcess(ProcessControlBlock *process) {
-	if (process == NULL) {
-		return;
-	}
-
-	process->state = TERMINATED;
-
-	// Clear the memory for that process
-	int memory_start = process->memory_start;
-	int memory_end = process->memory_end;
-	for (int i = memory_start; i <= memory_end; i++) {
-		memset(mainMemory.memoryArray[i].data, 0, sizeof(mainMemory.memoryArray[i].data));
-		memset(mainMemory.memoryArray[i].name, 0, sizeof(mainMemory.memoryArray[i].name));
-	}
-
-	// Find and remove the process from loaded_processes array
-	for (int i = 0; i < num_loaded_processes; i++) {
-		if (loaded_processes[i] == process || loaded_processes[i]->id == process->id) {
-			// Shift the array left
-			for (int j = i; j < num_loaded_processes - 1; j++) {
-				loaded_processes[j] = loaded_processes[j + 1];
-			}
-			loaded_processes[num_loaded_processes - 1] = NULL; // Optional: clear the last slot
-			num_loaded_processes--;
-			break; // Important: exit after removing
-		}
-	}
-	// during termination remove that process if it is locking any resource
-	// TODO may be removed but is essential for now .
-	if (userInputBlockingProcess != NULL && userInputBlockingProcess->id == process->id) {
-		userInputBlockingProcess = NULL;
-		safe_sem_post(&userInputSemaphore);
-	}
-	if (userOutputBlockingProcess != NULL && userOutputBlockingProcess->id == process->id) {
-		userOutputBlockingProcess = NULL;
-		safe_sem_post(&userOutputSemaphore);
-	}
-	if (fileBlockingProcess != NULL && fileBlockingProcess->id == process->id) {
-		safe_sem_post(&fileSemaphore);
-		fileBlockingProcess = NULL;
-	}
-	update_dashboard();
-}
-
-void scheduler_step(Scheduler* sched) {
-    int semValue = 0;
-	checkWaitingQueue();
-
-	// time_in_queue for each in all processes in queue
-	for (int i = 0; i < MLFQ_LEVELS; i++) {
-		Queue * currentQ = sched->input_queues[i];
-		Queue * tempQ = queue_new();
-		if (currentQ!= NULL && !queue_is_empty(currentQ)) {
-			while (!queue_is_empty(currentQ)) {
-				ProcessControlBlock* process = queue_pop_head(currentQ);
-				process->time_in_queue++;
-				queue_push_tail(tempQ, process);
-			}
-		}
-		while (!queue_is_empty(tempQ)) {
-			ProcessControlBlock* process = queue_pop_head(tempQ);
-			queue_push_tail(currentQ, process);
-		}
-	}
-
-    switch (sched->type) {
-        case SCHED_FCFS: {
-            if (!queue_is_empty(sched->input_queues[0])) {
-                ProcessControlBlock* process = (ProcessControlBlock*)queue_peek_head(sched->input_queues[0]);
-                sched->running_process = process; // Update running process
-
-                executeSingleLinePCB(process);
-                if (process->memory_start + process->program_counter + CODE_SEGMENT_OFFSET >= process->memory_end) {
-                    queue_pop_head(sched->input_queues[0]);
-                    queue_push_tail(sched->output_queue, process);
-                    sched->running_process = NULL; // Process completed
-                	terminateProcess(process);
-                }
-            }
-            break;
-        }
-
-        case SCHED_ROUND_ROBIN: {
-            if (!queue_is_empty(sched->input_queues[0])) {
-                ProcessControlBlock* process = (ProcessControlBlock*)queue_peek_head(sched->input_queues[0]);
-                sched->running_process = process; // Update running process
-
-                executeSingleLinePCB(process);
-                process->timeslice_used++;
-
-                if (process->state == BLOCKED) {
-                    queue_pop_head(sched->input_queues[0]);
-                    queue_push_tail(&blockedQueue, process);
-                    sched->running_process = NULL; // Process blocked
-                }
-
-                if (process->memory_start + process->program_counter + CODE_SEGMENT_OFFSET >= process->memory_end) {
-                    queue_pop_head(sched->input_queues[0]);
-                    queue_push_tail(sched->output_queue, process);
-                    sched->running_process = NULL; // Process completed
-                	terminateProcess(process);
-                } else if (process->timeslice_used >= sched->rr_quantum) {
-                    process->timeslice_used = 0;
-                    queue_pop_head(sched->input_queues[0]);
-                    queue_push_tail(sched->input_queues[0], process);
-                    sched->running_process = NULL; // Process moved back to ready queue
-                }
-            }
-            break;
-        }
-
-        case SCHED_MLFQ: {
-        	bool isDone = false;
-        	if (sched->running_process != NULL
-        		&& sched->running_process->state!=TERMINATED
-        		&& sched->running_process->state!=BLOCKED
-        		&& sched->running_process->timeslice_used!=0
-        		&& sched->running_process->timeslice_used < sched->mlfq_quantum[sched->running_process->priority]) {
-        		ProcessControlBlock* process = sched->running_process;
-        		sched->running_process = process;
-        		int level = process->priority;
-        		isDone = true;
-        		executeSingleLinePCB(process);
-        		process->timeslice_used++;
-        		if (process->state == BLOCKED) {
-        			queue_pop_head(sched->input_queues[level]);
-        			queue_push_tail(&blockedQueue, process);
-        		}
-
-        		if (process->memory_start + process->program_counter + CODE_SEGMENT_OFFSET > process->memory_end) {
-        			process = (ProcessControlBlock*)queue_pop_head(sched->input_queues[level]);
-        			process->timeslice_used = 0;
-        			queue_push_tail(sched->output_queue, process);
-        			// Process completed
-        			terminateProcess(process);
-        		} else if (process->timeslice_used >= sched->mlfq_quantum[level]) {
-        			process = (ProcessControlBlock*)queue_pop_head(sched->input_queues[level]);
-        			process->timeslice_used = 0;
-        			int next_level = (level < MLFQ_LEVELS - 1) ? level + 1 : level;
-        			process->priority = next_level;
-        			queue_push_tail(sched->input_queues[next_level], process);
-        			// Process moved to next level
-        		}
-        	}
-        	if (!isDone) {
-        		for (int level = 0; level < MLFQ_LEVELS; level++) {
-        			if (!queue_is_empty(sched->input_queues[level])) {
-        				ProcessControlBlock* process = (ProcessControlBlock*)queue_peek_head(sched->input_queues[level]);
-        				sched->running_process = process; // Update running process
-
-        				executeSingleLinePCB(process);
-        				process->timeslice_used++;
-
-        				if (process->state == BLOCKED) {
-        					queue_pop_head(sched->input_queues[level]);
-        					queue_push_tail(&blockedQueue, process);
-        					// Process blocked
-        					break;
-        				}
-
-        				if (process->memory_start + process->program_counter + CODE_SEGMENT_OFFSET > process->memory_end) {
-        					process = (ProcessControlBlock*)queue_pop_head(sched->input_queues[level]);
-        					process->timeslice_used = 0;
-        					queue_push_tail(sched->output_queue, process);
-        					// Process completed
-        					terminateProcess(process);
-        				} else if (process->timeslice_used >= sched->mlfq_quantum[level]) {
-        					process = (ProcessControlBlock*)queue_pop_head(sched->input_queues[level]);
-        					process->timeslice_used = 0;
-        					int next_level = (level < MLFQ_LEVELS - 1) ? level + 1 : level;
-        					process->priority = next_level;
-        					queue_push_tail(sched->input_queues[next_level], process);
-        					// Process moved to next level
-        				}
-        				break;
-        			}
-        		}
-        	}
-            break;
-        }
+    update_memory_viewer();
+    update_resource_management();
+
+    if (os_is_finished()) {
+        add_event_message("All processes terminated. Simulation finished.");
+        on_stop_button_clicked(NULL, NULL); // Reuse stop logic to update UI and state
+        return G_SOURCE_REMOVE; // Stop the timer
     }
-	// Check blocked processes first
-	if (!queue_is_empty(&blockedQueue) && sched->type != SCHED_FCFS) {
-		Queue* temp = queue_new();
 
-		while (!queue_is_empty(&blockedQueue)) {
-			ProcessControlBlock* process = (ProcessControlBlock*)queue_pop_head(&blockedQueue);
-
-			switch (process->blockedResource) {
-				case FILE_RW:
-					sem_getvalue(&fileSemaphore, &semValue);
-					break;
-				case USER_INPUT:
-					sem_getvalue(&userInputSemaphore, &semValue);
-					break;
-				case USER_OUTPUT:
-					sem_getvalue(&userOutputSemaphore, &semValue);
-					break;
-				default:
-					break;
-			}
-
-			if (semValue != 0) {
-				switch (process->blockedResource) {
-					case FILE_RW: {
-						safe_sem_wait(&fileSemaphore);
-						fileBlockingProcess  = process;
-						break;
-					}
-					case USER_INPUT: {
-						safe_sem_wait(&userInputSemaphore);
-						userInputBlockingProcess = process;
-						break;
-					}
-					case USER_OUTPUT: {
-						safe_sem_wait(&userOutputSemaphore);
-						userOutputBlockingProcess = process;
-						break;
-					}
-					default:
-						break;
-				}
-				process->blockedResource = NIL;
-				process->state = READY;
-				int level = process->priority;
-				int offset = sched->type==SCHED_MLFQ && (process->timeslice_used >= sched->mlfq_quantum[level]) && (level < MLFQ_LEVELS - 1) ? 1 : 0;
-				if (offset == 1)
-					process->timeslice_used = 0;
-				queue_push_tail(sched->input_queues[level+offset], process);
-			} else {
-				queue_push_tail(temp, process);
-			}
-		}
-
-		blockedQueue = *temp;
-		free(temp); // Free the temporary queue structure
-	}
-
-    // Update the GUI after each step
-    update_queues();
+    return G_SOURCE_CONTINUE; // Continue the timer
 }
